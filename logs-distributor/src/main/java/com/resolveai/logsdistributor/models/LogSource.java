@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * {@code LogSource} is a supporting data model class which encapsulates the source details of the log message.
+ */
 @Builder
 @Data
 public class LogSource {

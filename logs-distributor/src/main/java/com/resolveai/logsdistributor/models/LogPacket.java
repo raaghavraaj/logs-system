@@ -8,6 +8,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * The {@code LogPacket} class describes the data model of an object which will be a packet on the network consisting of
+ * several different logs. The log packet also contains a {@code checkSum} field for integrity verification.
+ */
 @Builder
 @Data
 public class LogPacket {

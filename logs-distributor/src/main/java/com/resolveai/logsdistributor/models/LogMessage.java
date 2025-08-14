@@ -8,6 +8,10 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * The {@code LogMessage} class describes the data model for a log message. It describes a source field which is
+ * defined as another data model {@link LogSource}.
+ */
 @Builder
 @Data
 public class LogMessage {
