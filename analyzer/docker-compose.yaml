@@ -1,13 +1,14 @@
 version: '3.8'
 
 services:
-  distributor:
+  analyzer:
     build: .
-    container_name: distributor-standalone
+    container_name: analyzer-standalone
     ports:
       - "8080:8080"
     environment:
-      - ANALYZERS_CONFIG=standalone:http://localhost:8080/api/v1/analyze:1.0
+      - ANALYZER_PORT=8080
+      - ANALYZER_ID=standalone-analyzer
       - SPRING_PROFILES_ACTIVE=docker
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/health || exit 1"]

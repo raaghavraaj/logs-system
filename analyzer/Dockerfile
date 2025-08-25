@@ -1,4 +1,4 @@
-# distributor-service/Dockerfile
+# analyzer-service/Dockerfile
 FROM maven:3.8.6-eclipse-temurin-17 as builder
 WORKDIR /app
 
