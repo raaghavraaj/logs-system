@@ -1,0 +1,62 @@
+{
+  "packetId": "pkt-9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "agentId": "log-agent-prod-01",
+  "timestamp": "2025-08-15T08:30:15.456Z",
+  "totalMessages": 3,
+  "messages": [
+    {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "timestamp": "2025-08-15T08:30:00.123Z",
+      "level": "ERROR",
+      "source": {
+        "application": "user-service",
+        "service": "authentication",
+        "instance": "auth-service-01",
+        "host": "prod-server-03"
+      },
+      "message": "Failed to authenticate user: invalid credentials provided",
+      "metadata": {
+        "userId": "12345",
+        "requestId": "req-abc123",
+        "errorCode": "AUTH_001"
+      }
+    },
+    {
+      "id": "e3b0c442-98fc-1c14-9afb-f4c8996fb924",
+      "timestamp": "2025-08-15T08:30:05.789Z",
+      "level": "INFO",
+      "source": {
+        "application": "user-service",
+        "service": "user-profile",
+        "instance": "profile-service-02",
+        "host": "prod-server-03"
+      },
+      "message": "User profile updated successfully",
+      "metadata": {
+        "userId": "67890",
+        "requestId": "req-def456",
+        "operation": "UPDATE_PROFILE"
+      }
+    },
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "timestamp": "2025-08-15T08:30:10.456Z",
+      "level": "WARN",
+      "source": {
+        "application": "payment-service",
+        "service": "transaction",
+        "instance": "payment-service-01",
+        "host": "prod-server-05"
+      },
+      "message": "Transaction processing took longer than expected",
+      "metadata": {
+        "transactionId": "txn-999888",
+        "amount": 150.75,
+        "currency": "USD",
+        "duration": 5500,
+        "threshold": 3000
+      }
+    }
+  ],
+  "checksum": "sha256:a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
+}
