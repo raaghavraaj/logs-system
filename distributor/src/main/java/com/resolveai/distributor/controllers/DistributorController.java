@@ -9,10 +9,10 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1")
-public class LogsController {
+public class DistributorController {
     private final DistributorService distributorService;
 
-    public LogsController(DistributorService distributorService) {
+    public DistributorController(DistributorService distributorService) {
         this.distributorService = distributorService;
     }
 
