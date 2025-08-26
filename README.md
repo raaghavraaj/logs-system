@@ -2,6 +2,8 @@
 
 A production-ready, scalable logs distribution system with weighted load balancing, comprehensive monitoring, and real-time analytics.
 
+> 📖 **For technical details, architectural decisions, and system trade-offs, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md)**
+
 ## 🎯 System Overview
 
 This system implements a high-performance logs distributor that receives log packets from multiple emitters and routes them to analyzers based on configurable weights. The system features message-based distribution (not packet-based), comprehensive metrics, real-time monitoring, and production-grade reliability.
@@ -226,8 +228,8 @@ curl -X POST http://localhost:8080/api/v1/logs \
 - **Analyzer-3**: Weight 0.3 (30% of messages)
 - **Analyzer-4**: Weight 0.4 (40% of messages)
 
-### Emergency Catch-up Algorithm
-The system includes an "Emergency Catch-up" mechanism that prioritizes severely underutilized analyzers (>1000 messages behind target) to ensure proper distribution convergence.
+### Distribution Algorithm
+The system uses an intelligent distribution algorithm that ensures long-term weight compliance. For technical details on the emergency catch-up mechanism and distribution logic, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
 
 ### Verify Distribution
 ```bash
@@ -281,27 +283,13 @@ docker-compose ps
 docker inspect logs-distributor --format='{{.State.Health.Status}}'
 ```
 
-## 📈 Performance Benchmarks
+## 📈 Performance
+- **Throughput**: 35+ messages/second
+- **Error Rate**: <0.1% under normal load
+- **Distribution Accuracy**: Converges to target weights within 5%
+- **Resource Usage**: <512MB memory, <5% CPU per service
 
-### Current System Performance
-Based on comprehensive testing:
-
-- **Throughput**: 35+ messages/second (12+ packets/second)
-- **Error Rate**: 0.00% under normal operations
-- **Queue Health**: Optimal (1-2 items average)
-- **Distribution Accuracy**: ±5% of target weights
-- **Uptime**: 99.9%+ availability
-- **Memory Usage**: <512MB per service
-- **CPU Usage**: <5% per service under load
-
-### Load Testing Results
-```bash
-# Baseline: 100 packets → 95%+ success rate
-# Burst: 500 packets rapid → 85%+ success rate  
-# Sustained: 30s continuous → 95%+ success rate
-# Memory: 20 large packets → 90%+ success rate
-# Concurrent: 10 agents × 20 packets → 90%+ success rate
-```
+For detailed performance analysis and benchmarking methodology, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
 
 ## 🔧 Configuration
 
@@ -410,45 +398,41 @@ docker stats
 ```
 
 ### Health Monitoring
-The system includes automated health monitoring with:
-- **Circuit Breakers**: Auto-disable failed analyzers
-- **Recovery Logic**: Automatic re-enablement after timeout
-- **Queue Monitoring**: Backpressure and overflow protection
-- **Error Rate Tracking**: Real-time error percentage calculation
+The system includes comprehensive health monitoring and automatic failure recovery. For details on circuit breaker patterns and recovery mechanisms, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
 
-## 📝 Testing Strategy
+## 📝 Testing
 
 ### Test Coverage
-- **Unit Tests**: 15+ tests covering core distribution logic
-- **Integration Tests**: 7 comprehensive multi-service scenarios  
-- **Performance Tests**: 5 load testing scenarios
-- **System Tests**: End-to-end validation with real traffic
+- **Unit Tests**: Core distribution logic and metrics
+- **Integration Tests**: Multi-service scenarios
+- **Performance Tests**: Load and stress testing with JMeter
+- **System Tests**: End-to-end validation
 
-### Continuous Testing
+### Running Tests
 ```bash
-# Run all tests in sequence
-./integration-tests.sh && ./performance-test.sh && ./test-system.sh distribution
+# Integration tests
+./integration-tests.sh
+
+# Performance tests
+./performance-test.sh
+
+# JMeter load tests
+cd jmeter && ./run-jmeter-tests.sh
+
+# Weight distribution validation
+./test-system.sh distribution
 ```
 
-## 🎯 Future Improvements
+For detailed testing strategy and methodology, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
 
-### Immediate Enhancements
-- [ ] Grafana dashboard integration
-- [ ] Advanced circuit breaker patterns
-- [ ] Message deduplication
-- [ ] Compression support
+## 🔮 Extensibility
+The system is designed for production scalability with support for:
+- Dynamic analyzer registration
+- Horizontal scaling
+- Advanced monitoring integration
+- Cloud deployment
 
-### Scalability Features  
-- [ ] Kubernetes deployment manifests
-- [ ] Auto-scaling based on queue depth
-- [ ] Multi-region support
-- [ ] Stream processing integration
-
-### Observability Enhancements
-- [ ] Distributed tracing with Jaeger
-- [ ] Custom business metrics
-- [ ] SLA monitoring and reporting
-- [ ] Automated performance regression detection
+For detailed improvement roadmap and scalability considerations, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
 
 ## 📄 License
 
