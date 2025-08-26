@@ -125,6 +125,65 @@ run_load_test() {
     echo -e "${GREEN}Load test completed${NC}"
 }
 
+# Function to check message-based weight distribution
+check_message_distribution() {
+    echo -e "${YELLOW}Checking message-based weight distribution...${NC}"
+    echo "=========================================="
+    
+    total_messages=0
+    declare -a message_counts
+    declare -a expected_weights
+    
+    # Get statistics from each analyzer
+    for i in {1..4}; do
+        echo -n "Analyzer-$i: "
+        
+        # Get stats from analyzer endpoint
+        stats=$(curl -s http://localhost:808$i/api/v1/stats 2>/dev/null || echo "")
+        if [[ -n "$stats" && "$stats" == *"Total Messages Processed"* ]]; then
+            # Extract message count from stats endpoint
+            messages=$(echo "$stats" | grep "Total Messages Processed:" | sed 's/.*Total Messages Processed: \([0-9]*\).*/\1/' || echo "0")
+        else
+            # Fallback: count from recent logs
+            messages=$(docker-compose logs analyzer-$i | grep "Total Messages:" | tail -1 | sed 's/.*Total Messages: \([0-9]*\).*/\1/' 2>/dev/null || echo "0")
+        fi
+        
+        if [[ -z "$messages" || "$messages" == "0" ]]; then
+            messages=0
+        fi
+        
+        message_counts[$i]=$messages
+        expected_weights[$i]="0.$i"
+        total_messages=$((total_messages + messages))
+        
+        echo "$messages messages processed"
+    done
+    
+    echo
+    echo "=== MESSAGE DISTRIBUTION ANALYSIS ==="
+    echo "Total Messages Processed: $total_messages"
+    echo
+    
+    if [ $total_messages -gt 0 ]; then
+        for i in {1..4}; do
+            messages=${message_counts[$i]}
+            expected_weight=${expected_weights[$i]}
+            expected_percent=$(echo "$expected_weight * 100" | bc -l 2>/dev/null | cut -d. -f1 || echo "$((expected_weight * 100))")
+            actual_percent=$(echo "scale=1; $messages * 100 / $total_messages" | bc -l 2>/dev/null | cut -d. -f1 || echo "$(($messages * 100 / $total_messages))")
+            
+            echo -n "Analyzer-$i (weight $expected_weight): "
+            echo -n "$messages messages = $actual_percent% "
+            echo "(expected: $expected_percent%)"
+        done
+        
+        echo
+        echo "Note: Distribution should converge to target weights over time"
+        echo "Small deviations are normal with concurrent processing"
+    else
+        echo -e "${RED}No messages processed yet${NC}"
+    fi
+}
+
 # Function to demonstrate failure handling
 test_failure_handling() {
     echo -e "${YELLOW}Testing failure handling...${NC}"
@@ -144,6 +203,11 @@ main() {
     check_health "Analyzer-3" "http://localhost:8083"
     check_health "Analyzer-4" "http://localhost:8084"
     
+    echo -e "${YELLOW}Checking emitters status...${NC}"
+    docker-compose logs emitter-steady --tail=2 | tail -1 || echo "  Emitter-steady: starting..."
+    docker-compose logs emitter-bursty --tail=2 | tail -1 || echo "  Emitter-bursty: starting..."
+    docker-compose logs emitter-heavy --tail=2 | tail -1 || echo "  Emitter-heavy: starting..."
+    
     echo
     echo "Step 2: Sending individual test packets..."
     send_log_packet "test-packet-1" "test-agent-1" 5
@@ -155,9 +219,13 @@ main() {
     run_load_test 20 4
     
     echo
-    echo "Step 4: Weight distribution test..."
+    echo "Step 4: Message-based weight distribution test..."
     echo "Sending 100 packets to see distribution..."
     run_load_test 100 10
+    
+    echo
+    echo "Step 5: Checking message distribution by weight..."
+    check_message_distribution
     
     echo
     echo "Step 5: Failure handling info..."
@@ -184,6 +252,9 @@ case "${1:-main}" in
         ;;
     "load")
         run_load_test "${2:-50}" "${3:-5}"
+        ;;
+    "distribution"|"dist")
+        check_message_distribution
         ;;
     "main"|*)
         main

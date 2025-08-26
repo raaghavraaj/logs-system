@@ -9,6 +9,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SERVER_PORT=8080
+      # Configurable analyzers - can easily add/remove/modify weights
+      - ANALYZERS_CONFIG=analyzer-1:http://analyzer-1:8080/api/v1/analyze:0.1,analyzer-2:http://analyzer-2:8080/api/v1/analyze:0.2,analyzer-3:http://analyzer-3:8080/api/v1/analyze:0.3,analyzer-4:http://analyzer-4:8080/api/v1/analyze:0.4
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/health || exit 1"]
       interval: 30s
@@ -105,6 +107,56 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
+    networks:
+      - logs-network
+
+  # Log Emitters - Python scripts that generate and send log packets
+  emitter-steady:
+    build:
+      context: ./emitter
+    container_name: logs-emitter-steady
+    environment:
+      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+      - AGENT_ID=steady-emitter
+      - EMISSION_RATE=2.0
+      - EMISSION_MODE=continuous
+      - EMISSION_DURATION=0
+    depends_on:
+      - distributor
+    restart: unless-stopped
+    networks:
+      - logs-network
+
+  emitter-bursty:
+    build:
+      context: ./emitter
+    container_name: logs-emitter-bursty
+    environment:
+      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+      - AGENT_ID=bursty-emitter
+      - EMISSION_RATE=0.5
+      - EMISSION_MODE=continuous
+      - EMISSION_DURATION=0
+      - BURST_PROBABILITY=0.3
+    depends_on:
+      - distributor
+    restart: unless-stopped
+    networks:
+      - logs-network
+
+  emitter-heavy:
+    build:
+      context: ./emitter
+    container_name: logs-emitter-heavy
+    environment:
+      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+      - AGENT_ID=heavy-load-emitter
+      - EMISSION_RATE=5.0
+      - EMISSION_MODE=continuous
+      - EMISSION_DURATION=0
+    depends_on:
+      - distributor
     restart: unless-stopped
     networks:
       - logs-network

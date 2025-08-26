@@ -43,6 +43,35 @@ A distributed logging system built with Spring Boot that demonstrates weighted l
 - **Thread Safety**: Concurrent data structures and atomic operations
 - **Configurable**: Environment-based configuration for different deployment scenarios
 
+## 📊 Message-Based Weight Distribution
+
+**CRITICAL**: The load balancing is based on the **total number of log messages processed** by each analyzer, **NOT the number of packets**.
+
+### How It Works
+- Each **log packet contains multiple log messages** (1-20 messages per packet)
+- **Complete packets** are sent to one analyzer (packets are never split)
+- **Weight distribution** is calculated based on total messages processed across all analyzers
+- **Algorithm** dynamically selects the analyzer that will best maintain target proportions
+
+### Weight Examples
+With 10,000 total log messages processed:
+- **Analyzer-1** (weight 0.1): Should process ~1,000 messages (10%)
+- **Analyzer-2** (weight 0.2): Should process ~2,000 messages (20%)
+- **Analyzer-3** (weight 0.3): Should process ~3,000 messages (30%)
+- **Analyzer-4** (weight 0.4): Should process ~4,000 messages (40%)
+
+### Verification Commands
+```bash
+# Check message-based distribution 
+./test-system.sh distribution
+
+# View detailed analyzer statistics
+curl http://localhost:8081/api/v1/stats  # Analyzer-1
+curl http://localhost:8082/api/v1/stats  # Analyzer-2
+curl http://localhost:8083/api/v1/stats  # Analyzer-3
+curl http://localhost:8084/api/v1/stats  # Analyzer-4
+```
+
 ## 🏁 Quick Start
 
 ### Prerequisites

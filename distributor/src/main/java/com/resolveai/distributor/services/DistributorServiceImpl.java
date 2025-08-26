@@ -14,21 +14,39 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Service
 public class DistributorServiceImpl implements DistributorService {
-    private final ExecutorService executorService =
-            Executors.newFixedThreadPool(4 * Runtime.getRuntime().availableProcessors());
+    // In-memory queue for packet processing with bounded capacity
+    private final BlockingQueue<Runnable> packetQueue = new LinkedBlockingQueue<>(10000);
+    private final ExecutorService executorService = new ThreadPoolExecutor(
+            4 * Runtime.getRuntime().availableProcessors(), // Core pool size
+            8 * Runtime.getRuntime().availableProcessors(), // Max pool size  
+            60L, TimeUnit.SECONDS, // Keep alive time
+            packetQueue, // Work queue
+            new ThreadFactory() {
+                private final AtomicInteger threadNumber = new AtomicInteger(1);
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "packet-processor-" + threadNumber.getAndIncrement());
+                    t.setDaemon(true);
+                    return t;
+                }
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy() // Backpressure policy
+    );
+    
     private final ConcurrentMap<String, AnalyzerInfo> analyzerInfoMap = new ConcurrentHashMap<>();
     private final AtomicLong totalMessagesProcessed = new AtomicLong(0);
+    private final AtomicLong packetsQueued = new AtomicLong(0);
+    private final AtomicLong packetsProcessed = new AtomicLong(0);
+    private final AtomicLong packetsDropped = new AtomicLong(0);
     private final RestTemplate restTemplate = new RestTemplate();
     
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
@@ -36,6 +54,64 @@ public class DistributorServiceImpl implements DistributorService {
 
     @PostConstruct
     public void init() {
+        // Load analyzer configuration from environment variables
+        // Format: ANALYZERS_CONFIG=id1:endpoint1:weight1,id2:endpoint2:weight2,...
+        String analyzersConfig = System.getenv("ANALYZERS_CONFIG");
+        
+        if (analyzersConfig != null && !analyzersConfig.trim().isEmpty()) {
+            // Parse dynamic configuration
+            parseAnalyzersConfig(analyzersConfig);
+        } else {
+            // Fallback to default configuration
+            initDefaultAnalyzers();
+        }
+        
+        log.info("Initialized with {} analyzers", analyzerInfoMap.size());
+        
+        analyzerInfoMap.forEach((id, info) -> 
+                log.info("Analyzer {}: endpoint={}, weight={}", id, info.getEndpoint(), info.getWeight())
+        );
+    }
+    
+    private void parseAnalyzersConfig(String config) {
+        try {
+            String[] analyzerConfigs = config.split(",");
+            for (String analyzerConfig : analyzerConfigs) {
+                // Split on the last colon to handle URLs with colons
+                String trimmedConfig = analyzerConfig.trim();
+                int lastColonIndex = trimmedConfig.lastIndexOf(":");
+                
+                if (lastColonIndex > 0 && lastColonIndex < trimmedConfig.length() - 1) {
+                    String idAndEndpoint = trimmedConfig.substring(0, lastColonIndex);
+                    String weightStr = trimmedConfig.substring(lastColonIndex + 1).trim();
+                    
+                    // Split id and endpoint on the first colon
+                    int firstColonIndex = idAndEndpoint.indexOf(":");
+                    if (firstColonIndex > 0) {
+                        String id = idAndEndpoint.substring(0, firstColonIndex).trim();
+                        String endpoint = idAndEndpoint.substring(firstColonIndex + 1).trim();
+                        double weight = Double.parseDouble(weightStr);
+                        
+                        addAnalyzer(id, endpoint, weight);
+                        log.info("Added analyzer from config: id={}, endpoint={}, weight={}", 
+                                id, endpoint, weight);
+                    } else {
+                        log.warn("Invalid analyzer config format: {}. Cannot find id separator", 
+                                analyzerConfig);
+                    }
+                } else {
+                    log.warn("Invalid analyzer config format: {}. Expected format: id:endpoint:weight", 
+                            analyzerConfig);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error parsing analyzers configuration: {}. Falling back to defaults.", e.getMessage());
+            analyzerInfoMap.clear(); // Clear any partially loaded config
+            initDefaultAnalyzers();
+        }
+    }
+    
+    private void initDefaultAnalyzers() {
         // Use Docker container names when running in Docker, localhost otherwise
         String profilesActive = System.getenv("SPRING_PROFILES_ACTIVE");
         if (profilesActive == null) {
@@ -57,12 +133,7 @@ public class DistributorServiceImpl implements DistributorService {
             addAnalyzer("analyzer-4", "http://localhost:8084/api/v1/analyze", 0.4);
         }
         
-        log.info("Initialized with {} analyzers (docker profile: {})", 
-                analyzerInfoMap.size(), isDockerProfile);
-        
-        analyzerInfoMap.forEach((id, info) -> 
-                log.info("Analyzer {}: endpoint={}, weight={}", id, info.getEndpoint(), info.getWeight())
-        );
+        log.info("Using default analyzer configuration (docker profile: {})", isDockerProfile);
     }
 
     private void addAnalyzer(String id, String endpoint, double weight) {
@@ -90,6 +161,7 @@ public class DistributorServiceImpl implements DistributorService {
     public void distributePacket(LogPacket logPacket) {
         if (analyzerInfoMap.isEmpty()) {
             log.warn("No analyzers are registered to receive log packets.");
+            packetsDropped.incrementAndGet();
             return;
         }
 
@@ -97,58 +169,100 @@ public class DistributorServiceImpl implements DistributorService {
 
         if(Objects.isNull(targetAnalyzer)) {
             log.error("Could not find an available analyzer for packet: {}, dropping the packet", logPacket.getPacketId());
+            packetsDropped.incrementAndGet();
             return;
         }
-        sendPacketToAnalyzerAsync(logPacket, targetAnalyzer);
-
+        
+        // Queue packet for async processing with backpressure handling
+        try {
+            packetsQueued.incrementAndGet();
+            sendPacketToAnalyzerAsync(logPacket, targetAnalyzer);
+            
+            // Log queue status and distribution periodically
+            long queued = packetsQueued.get();
+            if (queued % 100 == 0) { // Log every 100 packets
+                log.info("Queue status: queued={}, processed={}, dropped={}, queue_size={}", 
+                        queued, packetsProcessed.get(), packetsDropped.get(), packetQueue.size());
+                logMessageDistribution();
+            }
+        } catch (RejectedExecutionException e) {
+            log.error("Packet {} rejected due to queue overflow. Queue size: {}", 
+                    logPacket.getPacketId(), packetQueue.size());
+            packetsDropped.incrementAndGet();
+        }
     }
 
     /**
-     * This method chooses the best analyzer based on the condition that which analyzer would have the messages closest
-     * to their actual weight distribution, considering only online analyzers
+     * This method chooses the best analyzer based on weighted distribution with aggressive catch-up
+     * for severely underutilized analyzers
      */
     synchronized AnalyzerInfo findBestAnalyzer(int packetMessageCount) {
         // Check if any offline analyzers should be reconsidered
         checkForRecoveredAnalyzers();
 
-        // Calculate current total that will exist AFTER we send this packet
-        long currentTotalMessages = totalMessagesProcessed.get() + packetMessageCount;
+        long currentTotalMessages = totalMessagesProcessed.get();
         AnalyzerInfo bestCandidate = null;
         double minDeviation = Double.MAX_VALUE;
+        AnalyzerInfo mostDeficitAnalyzer = null;
+        double maxDeficit = 0.0;
         
-        // Debug logging for distribution analysis
-        log.debug("Finding best analyzer for {} messages. Current total will be: {}", 
+        // Debug logging
+        log.info("=== DISTRIBUTION DECISION for {} messages (total: {}) ===", 
                 packetMessageCount, currentTotalMessages);
 
-        for (AnalyzerInfo analyzer : analyzerInfoMap.values()) {
+        for (Map.Entry<String, AnalyzerInfo> entry : analyzerInfoMap.entrySet()) {
+            String analyzerId = entry.getKey();
+            AnalyzerInfo analyzer = entry.getValue();
+            
             if (!analyzer.isOnline()) {
-                continue; // Skip offline analyzers
+                log.debug("SKIPPING offline analyzer: {}", analyzerId);
+                continue;
             }
             
-            // Calculate ideal message count for this analyzer based on future total
-            double idealMessageCount = currentTotalMessages * analyzer.getWeight();
+            // Current state
+            long currentMessages = analyzer.getMessageCount().get();
+            double currentIdeal = currentTotalMessages * analyzer.getWeight();
+            double currentDeficit = currentIdeal - currentMessages;
             
-            // Calculate what this analyzer would have AFTER receiving this packet
-            long analyzerFutureCount = analyzer.getMessageCount().get() + packetMessageCount;
+            // Future state after receiving this packet
+            long futureTotal = currentTotalMessages + packetMessageCount;
+            double futureIdeal = futureTotal * analyzer.getWeight();
+            long futureMessages = currentMessages + packetMessageCount;
+            double futureDeviation = Math.abs(futureMessages - futureIdeal);
             
-            // Calculate deviation from ideal distribution
-            double deviation = Math.abs(analyzerFutureCount - idealMessageCount);
+            log.info("Analyzer {}: current={} (ideal={:.0f}, deficit={:.0f}), future={} (ideal={:.0f}, dev={:.0f})",
+                    analyzerId, currentMessages, currentIdeal, currentDeficit, 
+                    futureMessages, futureIdeal, futureDeviation);
             
-            log.debug("Analyzer {}: current={}, future={}, ideal={:.1f}, deviation={:.1f}", 
-                    analyzer.getEndpoint(), analyzer.getMessageCount().get(), 
-                    analyzerFutureCount, idealMessageCount, deviation);
+            // Track analyzer with biggest deficit for emergency catch-up
+            if (currentDeficit > maxDeficit) {
+                maxDeficit = currentDeficit;
+                mostDeficitAnalyzer = analyzer;
+            }
             
-            if (deviation < minDeviation || (deviation == minDeviation && bestCandidate == null)) {
-                minDeviation = deviation;
+            // Normal selection: minimize future deviation
+            if (futureDeviation < minDeviation) {
+                minDeviation = futureDeviation;
                 bestCandidate = analyzer;
             }
         }
         
-        if (bestCandidate != null) {
-            log.debug("Selected analyzer: {} with deviation {:.1f}", 
-                    bestCandidate.getEndpoint(), minDeviation);
+        // EMERGENCY CATCH-UP: If any analyzer is more than 1000 messages behind ideal, 
+        // prioritize it regardless of normal selection
+        if (mostDeficitAnalyzer != null && maxDeficit > 1000) {
+            log.warn("EMERGENCY CATCH-UP: Selecting analyzer with deficit of {:.0f} messages", maxDeficit);
+            bestCandidate = mostDeficitAnalyzer;
         }
         
+        String selectedId = "NONE";
+        for (Map.Entry<String, AnalyzerInfo> entry : analyzerInfoMap.entrySet()) {
+            if (entry.getValue() == bestCandidate) {
+                selectedId = entry.getKey();
+                break;
+            }
+        }
+        
+        log.info("SELECTED: {} (deviation: {:.0f})", selectedId, minDeviation);
         return bestCandidate;
     }
 
@@ -168,7 +282,7 @@ public class DistributorServiceImpl implements DistributorService {
     void sendPacketToAnalyzerAsync(LogPacket logPacket, AnalyzerInfo analyzer) {
         executorService.submit(() -> {
             try {
-                log.debug("Sending packet {} to analyzer at {} with {} messages",
+                log.debug("Processing queued packet {} to analyzer at {} with {} messages",
                         logPacket.getPacketId(), analyzer.getEndpoint(), logPacket.getMessages().size());
                 
                 // Prepare HTTP request
@@ -188,6 +302,7 @@ public class DistributorServiceImpl implements DistributorService {
                     analyzer.getMessageCount().addAndGet(logPacket.getMessages().size());
                     totalMessagesProcessed.addAndGet(logPacket.getMessages().size());
                     analyzer.getConsecutiveFailures().set(0);
+                    packetsProcessed.incrementAndGet();
                     
                     if (!analyzer.isOnline()) {
                         log.info("Analyzer {} is back online", analyzer.getEndpoint());
@@ -199,12 +314,14 @@ public class DistributorServiceImpl implements DistributorService {
                 } else {
                     log.warn("Analyzer {} returned non-success status: {}", 
                             analyzer.getEndpoint(), response.getStatusCode());
+                    packetsDropped.incrementAndGet();
                     handleAnalyzerFailure(analyzer, "HTTP " + response.getStatusCode());
                 }
                 
             } catch (Exception e) {
                 log.error("Failed to send packet {} to analyzer {}: {}", 
                         logPacket.getPacketId(), analyzer.getEndpoint(), e.getMessage());
+                packetsDropped.incrementAndGet();
                 handleAnalyzerFailure(analyzer, e.getMessage());
             }
         });
@@ -222,5 +339,25 @@ public class DistributorServiceImpl implements DistributorService {
             log.warn("Analyzer {} failed ({}/{}): {}", 
                     analyzer.getEndpoint(), failures, MAX_CONSECUTIVE_FAILURES, errorMessage);
         }
+    }
+    
+    private void logMessageDistribution() {
+        long totalMessages = totalMessagesProcessed.get();
+        if (totalMessages == 0) return;
+        
+        StringBuilder distribution = new StringBuilder();
+        distribution.append("MESSAGE DISTRIBUTION: ");
+        
+        for (Map.Entry<String, AnalyzerInfo> entry : analyzerInfoMap.entrySet()) {
+            AnalyzerInfo analyzer = entry.getValue();
+            long messages = analyzer.getMessageCount().get();
+            double percentage = (messages * 100.0) / totalMessages;
+            double expectedPercentage = analyzer.getWeight() * 100.0;
+            
+            distribution.append(String.format("%s: %d msgs (%.1f%%, target: %.1f%%) ", 
+                    entry.getKey(), messages, percentage, expectedPercentage));
+        }
+        
+        log.info(distribution.toString());
     }
 }
