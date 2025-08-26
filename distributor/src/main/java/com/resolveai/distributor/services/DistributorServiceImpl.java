@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 @Service
 public class DistributorServiceImpl implements DistributorService {
+    
+    private final MetricsService metricsService;
     // In-memory queue for packet processing with bounded capacity
     private final BlockingQueue<Runnable> packetQueue = new LinkedBlockingQueue<>(10000);
     private final ExecutorService executorService = new ThreadPoolExecutor(
@@ -51,6 +53,10 @@ public class DistributorServiceImpl implements DistributorService {
     
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
     private static final Duration OFFLINE_TIMEOUT = Duration.ofSeconds(30);
+    
+    public DistributorServiceImpl(MetricsService metricsService) {
+        this.metricsService = metricsService;
+    }
 
     @PostConstruct
     public void init() {
@@ -159,9 +165,13 @@ public class DistributorServiceImpl implements DistributorService {
 
     @Override
     public void distributePacket(LogPacket logPacket) {
+        Instant startTime = Instant.now();
+        metricsService.recordPacketReceived();
+        
         if (analyzerInfoMap.isEmpty()) {
             log.warn("No analyzers are registered to receive log packets.");
             packetsDropped.incrementAndGet();
+            metricsService.recordPacketDropped();
             return;
         }
 
@@ -170,6 +180,7 @@ public class DistributorServiceImpl implements DistributorService {
         if(Objects.isNull(targetAnalyzer)) {
             log.error("Could not find an available analyzer for packet: {}, dropping the packet", logPacket.getPacketId());
             packetsDropped.incrementAndGet();
+            metricsService.recordPacketDropped();
             return;
         }
         
@@ -177,6 +188,11 @@ public class DistributorServiceImpl implements DistributorService {
         try {
             packetsQueued.incrementAndGet();
             sendPacketToAnalyzerAsync(logPacket, targetAnalyzer);
+            
+            // Record processing time and update metrics
+            Duration processingTime = Duration.between(startTime, Instant.now());
+            metricsService.recordPacketProcessed(processingTime);
+            metricsService.updateQueueSize(packetQueue.size());
             
             // Log queue status and distribution periodically
             long queued = packetsQueued.get();
@@ -189,6 +205,7 @@ public class DistributorServiceImpl implements DistributorService {
             log.error("Packet {} rejected due to queue overflow. Queue size: {}", 
                     logPacket.getPacketId(), packetQueue.size());
             packetsDropped.incrementAndGet();
+            metricsService.recordPacketDropped();
         }
     }
 
@@ -281,6 +298,9 @@ public class DistributorServiceImpl implements DistributorService {
 
     void sendPacketToAnalyzerAsync(LogPacket logPacket, AnalyzerInfo analyzer) {
         executorService.submit(() -> {
+            Instant requestStart = Instant.now();
+            String analyzerId = getAnalyzerId(analyzer);
+            
             try {
                 log.debug("Processing queued packet {} to analyzer at {} with {} messages",
                         logPacket.getPacketId(), analyzer.getEndpoint(), logPacket.getMessages().size());
@@ -297,12 +317,19 @@ public class DistributorServiceImpl implements DistributorService {
                     Void.class
                 );
                 
+                Duration requestDuration = Duration.between(requestStart, Instant.now());
+                
                 if (response.getStatusCode().is2xxSuccessful()) {
                     // On success, update the message count and reset failure count
                     analyzer.getMessageCount().addAndGet(logPacket.getMessages().size());
                     totalMessagesProcessed.addAndGet(logPacket.getMessages().size());
                     analyzer.getConsecutiveFailures().set(0);
                     packetsProcessed.incrementAndGet();
+                    
+                    // Record metrics
+                    metricsService.recordMessagesSentToAnalyzer(analyzerId, logPacket.getMessages().size());
+                    metricsService.recordAnalyzerSuccess(analyzerId, requestDuration);
+                    metricsService.recordHttpRequest(requestDuration);
                     
                     if (!analyzer.isOnline()) {
                         log.info("Analyzer {} is back online", analyzer.getEndpoint());
@@ -315,16 +342,30 @@ public class DistributorServiceImpl implements DistributorService {
                     log.warn("Analyzer {} returned non-success status: {}", 
                             analyzer.getEndpoint(), response.getStatusCode());
                     packetsDropped.incrementAndGet();
+                    metricsService.recordPacketFailed();
+                    metricsService.recordAnalyzerFailure(analyzerId, requestDuration);
                     handleAnalyzerFailure(analyzer, "HTTP " + response.getStatusCode());
                 }
                 
             } catch (Exception e) {
+                Duration requestDuration = Duration.between(requestStart, Instant.now());
                 log.error("Failed to send packet {} to analyzer {}: {}", 
                         logPacket.getPacketId(), analyzer.getEndpoint(), e.getMessage());
                 packetsDropped.incrementAndGet();
+                metricsService.recordPacketFailed();
+                metricsService.recordAnalyzerFailure(analyzerId, requestDuration);
                 handleAnalyzerFailure(analyzer, e.getMessage());
             }
         });
+    }
+    
+    private String getAnalyzerId(AnalyzerInfo analyzer) {
+        for (Map.Entry<String, AnalyzerInfo> entry : analyzerInfoMap.entrySet()) {
+            if (entry.getValue() == analyzer) {
+                return entry.getKey();
+            }
+        }
+        return "unknown";
     }
     
     private void handleAnalyzerFailure(AnalyzerInfo analyzer, String errorMessage) {
