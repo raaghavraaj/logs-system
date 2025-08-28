@@ -1,9 +1,6 @@
 package com.resolveai.analyzer.controllers;
 
 import com.resolveai.analyzer.models.LogPacket;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -12,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,46 +17,22 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequestMapping("/api/v1")
 public class AnalyzerController {
     
-    // Cumulative statistics tracking
+    // Simple statistics tracking for logs
     private final AtomicLong totalPacketsProcessed = new AtomicLong(0);
     private final AtomicLong totalMessagesProcessed = new AtomicLong(0);
     private final Map<String, AtomicLong> messagesByLevel = new ConcurrentHashMap<>();
     private final Map<String, AtomicLong> messagesByAgent = new ConcurrentHashMap<>();
     private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
     
-    // Micrometer metrics
-    private final Counter packetsCounter;
-    private final Counter messagesCounter;
-    private final Timer processingTimer;
-    private final MeterRegistry meterRegistry;
-    
     private final String analyzerId = System.getenv().getOrDefault("ANALYZER_ID", "unknown-analyzer");
     
-    public AnalyzerController(MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
-        
+    public AnalyzerController() {
         // Initialize level counters
         messagesByLevel.put("DEBUG", new AtomicLong(0));
         messagesByLevel.put("INFO", new AtomicLong(0));
         messagesByLevel.put("WARN", new AtomicLong(0));
         messagesByLevel.put("ERROR", new AtomicLong(0));
         messagesByLevel.put("FATAL", new AtomicLong(0));
-        
-        // Initialize Micrometer metrics
-        this.packetsCounter = Counter.builder("analyzer.packets.processed")
-                .description("Total packets processed by this analyzer")
-                .tag("analyzer", analyzerId)
-                .register(meterRegistry);
-                
-        this.messagesCounter = Counter.builder("analyzer.messages.processed")
-                .description("Total messages processed by this analyzer")
-                .tag("analyzer", analyzerId)
-                .register(meterRegistry);
-                
-        this.processingTimer = Timer.builder("analyzer.processing.time")
-                .description("Time taken to process packets")
-                .tag("analyzer", analyzerId)
-                .register(meterRegistry);
     }
 
     @GetMapping("/health")
@@ -70,99 +42,70 @@ public class AnalyzerController {
     
     @GetMapping("/stats")
     public ResponseEntity<String> getStatistics() {
+        long uptime = System.currentTimeMillis() - startTime.get();
+        long packets = totalPacketsProcessed.get();
+        long messages = totalMessagesProcessed.get();
+        
+        double packetsPerSec = packets > 0 ? (packets * 1000.0) / uptime : 0;
+        double messagesPerSec = messages > 0 ? (messages * 1000.0) / uptime : 0;
+        
         StringBuilder stats = new StringBuilder();
         stats.append(String.format("=== ANALYZER %s STATISTICS ===\n", analyzerId));
-        stats.append(String.format("Total Packets Processed: %d\n", totalPacketsProcessed.get()));
-        stats.append(String.format("Total Messages Processed: %d\n", totalMessagesProcessed.get()));
+        stats.append(String.format("Total Packets Processed: %d\n", packets));
+        stats.append(String.format("Total Messages Processed: %d\n", messages));
         stats.append("Messages by Level:\n");
-        messagesByLevel.forEach((level, count) -> 
-            stats.append(String.format("  %s: %d\n", level, count.get())));
+        
+        messagesByLevel.entrySet().stream()
+                .sorted(Map.Entry.<String, AtomicLong>comparingByValue((v1, v2) -> Long.compare(v2.get(), v1.get())))
+                .forEach(entry -> stats.append(String.format("  %s: %d\n", entry.getKey(), entry.getValue().get())));
+        
         stats.append("Top Agents:\n");
         messagesByAgent.entrySet().stream()
-            .sorted((e1, e2) -> Long.compare(e2.getValue().get(), e1.getValue().get()))
-            .limit(5)
-            .forEach(entry -> 
-                stats.append(String.format("  %s: %d messages\n", entry.getKey(), entry.getValue().get())));
-                
-        // Performance metrics
-        long uptimeMs = System.currentTimeMillis() - startTime.get();
-        double packetsPerSec = uptimeMs > 0 ? (totalPacketsProcessed.get() * 1000.0) / uptimeMs : 0.0;
-        double messagesPerSec = uptimeMs > 0 ? (totalMessagesProcessed.get() * 1000.0) / uptimeMs : 0.0;
+                .sorted(Map.Entry.<String, AtomicLong>comparingByValue((v1, v2) -> Long.compare(v2.get(), v1.get())))
+                .limit(5)
+                .forEach(entry -> stats.append(String.format("  %s: %d messages\n", entry.getKey(), entry.getValue().get())));
         
         stats.append("\nPerformance Metrics:\n");
         stats.append(String.format("  Packets/sec: %.2f\n", packetsPerSec));
         stats.append(String.format("  Messages/sec: %.2f\n", messagesPerSec));
-        stats.append(String.format("  Uptime: %d seconds\n", uptimeMs / 1000));
+        stats.append(String.format("  Uptime: %d seconds\n", uptime / 1000));
         
         return ResponseEntity.ok(stats.toString());
     }
-
+    
     @PostMapping("/analyze")
-    public ResponseEntity<Void> analyzeLogPacket(@RequestBody LogPacket logPacket) {
-        log.info("Received log packet {} with {} messages from agent {}",
-                logPacket.getPacketId(),
-                logPacket.getMessages().size(),
-                logPacket.getAgentId());
-
-        processLogPacket(logPacket);
-
-        return ResponseEntity.accepted().build();
-    }
-
-    private void processLogPacket(@NonNull LogPacket logPacket) {
+    public ResponseEntity<String> analyzeLogPacket(@RequestBody LogPacket logPacket) {
         Instant startTime = Instant.now();
         
-        // Update packet counter
-        long packetCount = totalPacketsProcessed.incrementAndGet();
-        packetsCounter.increment();
+        log.info("PACKET_RECEIVED | analyzer={} | packet_id={} | messages={} | agent_id={} | timestamp={}", 
+                analyzerId, logPacket.getPacketId(), logPacket.getMessages().size(), 
+                logPacket.getAgentId(), startTime);
         
-        // Process each message and update counters
-        int messageCount = logPacket.getMessages().size();
-        long totalMessages = totalMessagesProcessed.addAndGet(messageCount);
-        messagesCounter.increment(messageCount);
+        // Update counters
+        totalPacketsProcessed.incrementAndGet();
+        totalMessagesProcessed.addAndGet(logPacket.getMessages().size());
         
-        // Count messages by level and create level-specific metrics
-        logPacket.getMessages().forEach(msg -> {
-            String level = msg.getLevel().name();
+        // Process each message and track by level and agent
+        logPacket.getMessages().forEach(message -> {
+            String level = message.getLevel().toString();
+            String agent = logPacket.getAgentId();
+            
+            // Update level counters
             messagesByLevel.computeIfAbsent(level, k -> new AtomicLong(0)).incrementAndGet();
             
-            // Create per-level metrics
-            Counter.builder("analyzer.messages.by.level")
-                    .description("Messages processed by log level")
-                    .tag("analyzer", analyzerId)
-                    .tag("level", level)
-                    .register(meterRegistry)
-                    .increment();
+            // Update agent counters
+            messagesByAgent.computeIfAbsent(agent, k -> new AtomicLong(0)).incrementAndGet();
+            
+            log.debug("MESSAGE_PROCESSED | analyzer={} | level={} | agent={} | message={}", 
+                    analyzerId, level, agent, message.getMessage());
         });
         
-        // Count messages by agent
-        messagesByAgent.computeIfAbsent(logPacket.getAgentId(), k -> new AtomicLong(0))
-                      .addAndGet(messageCount);
+        Duration processingTime = Duration.between(startTime, Instant.now());
         
-        // Create per-agent metrics
-        Counter.builder("analyzer.messages.by.agent")
-                .description("Messages processed by agent")
-                .tag("analyzer", analyzerId)
-                .tag("agent", logPacket.getAgentId())
-                .register(meterRegistry)
-                .increment(messageCount);
+        log.info("PACKET_PROCESSED | analyzer={} | packet_id={} | messages={} | processing_ms={} | total_packets={} | total_messages={}", 
+                analyzerId, logPacket.getPacketId(), logPacket.getMessages().size(), 
+                processingTime.toMillis(), totalPacketsProcessed.get(), totalMessagesProcessed.get());
         
-        // Record processing time
-        Duration processingDuration = Duration.between(startTime, Instant.now());
-        processingTimer.record(processingDuration);
-        
-        // Calculate percentages for debug counts
-        long debugCount = logPacket.getMessages().stream()
-                .filter(msg -> msg.getLevel().name().equals("DEBUG"))
-                .count();
-        long errorCount = logPacket.getMessages().stream()
-                .filter(msg -> msg.getLevel().name().equals("ERROR"))
-                .count();
-
-        // Enhanced logging with cumulative stats
-        log.info("Packet {} processed: {} messages (DEBUG: {}, ERROR: {}) | " +
-                 "ANALYZER {}: Total Packets: {}, Total Messages: {}", 
-                logPacket.getPacketId(), messageCount, debugCount, errorCount,
-                analyzerId, packetCount, totalMessages);
+        return ResponseEntity.ok("Log packet processed successfully\n");
     }
 }

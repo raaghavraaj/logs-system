@@ -25,7 +25,8 @@ import java.util.concurrent.atomic.AtomicLong;
 @Service
 public class DistributorServiceImpl implements DistributorService {
     
-    private final MetricsService metricsService;
+    // Tracking variables for structured logging
+    private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
     // In-memory queue for packet processing with bounded capacity
     private final BlockingQueue<Runnable> packetQueue = new LinkedBlockingQueue<>(50000);
     private final ExecutorService executorService = new ThreadPoolExecutor(
@@ -55,8 +56,8 @@ public class DistributorServiceImpl implements DistributorService {
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
     private static final Duration OFFLINE_TIMEOUT = Duration.ofSeconds(30);
     
-    public DistributorServiceImpl(MetricsService metricsService) {
-        this.metricsService = metricsService;
+    public DistributorServiceImpl() {
+        // No dependencies needed - using structured logging
     }
 
     @PostConstruct
@@ -167,46 +168,52 @@ public class DistributorServiceImpl implements DistributorService {
     @Override
     public void distributePacket(LogPacket logPacket) {
         Instant startTime = Instant.now();
-        metricsService.recordPacketReceived();
+        
+        // Structured log entry for packet received
+        log.info("PACKET_RECEIVED | packet_id={} | messages={} | agent_id={} | timestamp={}", 
+                logPacket.getPacketId(), logPacket.getMessages().size(), 
+                logPacket.getAgentId(), startTime);
         
         if (analyzerInfoMap.isEmpty()) {
-            log.warn("No analyzers are registered to receive log packets.");
+            log.warn("PACKET_DROPPED | reason=no_analyzers | packet_id={}", logPacket.getPacketId());
             packetsDropped.incrementAndGet();
-            metricsService.recordPacketDropped();
             return;
         }
 
         AnalyzerInfo targetAnalyzer = findBestAnalyzer(logPacket.getMessages().size());
 
         if(Objects.isNull(targetAnalyzer)) {
-            log.error("Could not find an available analyzer for packet: {}, dropping the packet", logPacket.getPacketId());
+            log.error("PACKET_DROPPED | reason=no_available_analyzer | packet_id={} | queue_size={}", 
+                    logPacket.getPacketId(), packetQueue.size());
             packetsDropped.incrementAndGet();
-            metricsService.recordPacketDropped();
             return;
         }
         
         // Queue packet for async processing with backpressure handling
         try {
             packetsQueued.incrementAndGet();
+            
+            // Find analyzer ID for logging
+            String analyzerId = findAnalyzerId(targetAnalyzer);
+            log.info("PACKET_QUEUED | packet_id={} | target_analyzer={} | queue_size={} | messages={}", 
+                    logPacket.getPacketId(), analyzerId, packetQueue.size(), logPacket.getMessages().size());
+            
             sendPacketToAnalyzerAsync(logPacket, targetAnalyzer);
             
-            // Record processing time and update metrics
+            // Structured performance logging
             Duration processingTime = Duration.between(startTime, Instant.now());
-            metricsService.recordPacketProcessed(processingTime);
-            metricsService.updateQueueSize(packetQueue.size());
+            log.debug("PACKET_PROCESSED | packet_id={} | processing_time_ms={} | queue_size={}", 
+                    logPacket.getPacketId(), processingTime.toMillis(), packetQueue.size());
             
-            // Log queue status and distribution periodically
+            // Log system status periodically
             long queued = packetsQueued.get();
             if (queued % 100 == 0) { // Log every 100 packets
-                log.info("Queue status: queued={}, processed={}, dropped={}, queue_size={}", 
-                        queued, packetsProcessed.get(), packetsDropped.get(), packetQueue.size());
-                logMessageDistribution();
+                logSystemStatus();
             }
         } catch (RejectedExecutionException e) {
-            log.error("Packet {} rejected due to queue overflow. Queue size: {}", 
+            log.error("PACKET_REJECTED | reason=queue_overflow | packet_id={} | queue_size={} | queue_capacity=50000", 
                     logPacket.getPacketId(), packetQueue.size());
             packetsDropped.incrementAndGet();
-            metricsService.recordPacketDropped();
         }
     }
 
@@ -224,8 +231,8 @@ public class DistributorServiceImpl implements DistributorService {
         AnalyzerInfo mostDeficitAnalyzer = null;
         double maxDeficit = 0.0;
         
-        // Debug logging
-        log.info("=== DISTRIBUTION DECISION for {} messages (total: {}) ===", 
+        // Structured logging for distribution decision
+        log.debug("DISTRIBUTION_DECISION | messages={} | total_messages={}", 
                 packetMessageCount, currentTotalMessages);
 
         for (Map.Entry<String, AnalyzerInfo> entry : analyzerInfoMap.entrySet()) {
@@ -248,7 +255,7 @@ public class DistributorServiceImpl implements DistributorService {
             long futureMessages = currentMessages + packetMessageCount;
             double futureDeviation = Math.abs(futureMessages - futureIdeal);
             
-            log.info("Analyzer {}: current={} (ideal={:.0f}, deficit={:.0f}), future={} (ideal={:.0f}, dev={:.0f})",
+            log.debug("ANALYZER_EVALUATION | analyzer={} | current={} | ideal={:.0f} | deficit={:.0f} | future={} | future_ideal={:.0f} | deviation={:.0f}",
                     analyzerId, currentMessages, currentIdeal, currentDeficit, 
                     futureMessages, futureIdeal, futureDeviation);
             
@@ -268,7 +275,7 @@ public class DistributorServiceImpl implements DistributorService {
         // EMERGENCY CATCH-UP: If any analyzer is more than 1000 messages behind ideal, 
         // prioritize it regardless of normal selection
         if (mostDeficitAnalyzer != null && maxDeficit > 1000) {
-            log.warn("EMERGENCY CATCH-UP: Selecting analyzer with deficit of {:.0f} messages", maxDeficit);
+            log.info("EMERGENCY_CATCHUP | deficit={:.0f}", maxDeficit);
             bestCandidate = mostDeficitAnalyzer;
         }
         
@@ -280,7 +287,7 @@ public class DistributorServiceImpl implements DistributorService {
             }
         }
         
-        log.info("SELECTED: {} (deviation: {:.0f})", selectedId, minDeviation);
+        log.debug("ANALYZER_SELECTED | analyzer={} | deviation={:.0f}", selectedId, minDeviation);
         return bestCandidate;
     }
 
@@ -289,7 +296,8 @@ public class DistributorServiceImpl implements DistributorService {
         for (AnalyzerInfo analyzer : analyzerInfoMap.values()) {
             if (!analyzer.isOnline() && analyzer.getLastFailureTime() != null) {
                 if (Duration.between(analyzer.getLastFailureTime(), now).compareTo(OFFLINE_TIMEOUT) > 0) {
-                    log.info("Attempting to bring analyzer {} back online after timeout", analyzer.getEndpoint());
+                    log.info("ANALYZER_RECOVERY | endpoint={} | offline_duration_s={}", 
+                            analyzer.getEndpoint(), Duration.between(analyzer.getLastFailureTime(), now).getSeconds());
                     analyzer.setOnline(true);
                     analyzer.getConsecutiveFailures().set(0);
                 }
@@ -327,34 +335,25 @@ public class DistributorServiceImpl implements DistributorService {
                     analyzer.getConsecutiveFailures().set(0);
                     packetsProcessed.incrementAndGet();
                     
-                    // Record metrics
-                    metricsService.recordMessagesSentToAnalyzer(analyzerId, logPacket.getMessages().size());
-                    metricsService.recordAnalyzerSuccess(analyzerId, requestDuration);
-                    metricsService.recordHttpRequest(requestDuration);
-                    
                     if (!analyzer.isOnline()) {
-                        log.info("Analyzer {} is back online", analyzer.getEndpoint());
+                        log.info("ANALYZER_ONLINE | endpoint={}", analyzer.getEndpoint());
                         analyzer.setOnline(true);
                     }
                     
-                    log.debug("Successfully sent packet {} to analyzer {}", 
-                            logPacket.getPacketId(), analyzer.getEndpoint());
+                    log.info("PACKET_SENT_SUCCESS | packet_id={} | analyzer={} | messages={} | duration_ms={}", 
+                            logPacket.getPacketId(), analyzerId, logPacket.getMessages().size(), requestDuration.toMillis());
                 } else {
-                    log.warn("Analyzer {} returned non-success status: {}", 
-                            analyzer.getEndpoint(), response.getStatusCode());
+                    log.warn("PACKET_SENT_FAILURE | packet_id={} | analyzer={} | status={} | duration_ms={}", 
+                            logPacket.getPacketId(), analyzerId, response.getStatusCode(), requestDuration.toMillis());
                     packetsDropped.incrementAndGet();
-                    metricsService.recordPacketFailed();
-                    metricsService.recordAnalyzerFailure(analyzerId, requestDuration);
                     handleAnalyzerFailure(analyzer, "HTTP " + response.getStatusCode());
                 }
                 
             } catch (Exception e) {
                 Duration requestDuration = Duration.between(requestStart, Instant.now());
-                log.error("Failed to send packet {} to analyzer {}: {}", 
-                        logPacket.getPacketId(), analyzer.getEndpoint(), e.getMessage());
+                log.error("PACKET_SENT_ERROR | packet_id={} | analyzer={} | error={} | duration_ms={}", 
+                        logPacket.getPacketId(), analyzerId, e.getMessage(), requestDuration.toMillis());
                 packetsDropped.incrementAndGet();
-                metricsService.recordPacketFailed();
-                metricsService.recordAnalyzerFailure(analyzerId, requestDuration);
                 handleAnalyzerFailure(analyzer, e.getMessage());
             }
         });
@@ -375,20 +374,42 @@ public class DistributorServiceImpl implements DistributorService {
         
         if (failures >= MAX_CONSECUTIVE_FAILURES) {
             analyzer.setOnline(false);
-            log.error("Marking analyzer {} as offline after {} consecutive failures. Last error: {}", 
+            log.error("ANALYZER_OFFLINE | endpoint={} | failures={} | error={}", 
                     analyzer.getEndpoint(), failures, errorMessage);
         } else {
-            log.warn("Analyzer {} failed ({}/{}): {}", 
+            log.warn("ANALYZER_FAILURE | endpoint={} | failures={} | max={} | error={}", 
                     analyzer.getEndpoint(), failures, MAX_CONSECUTIVE_FAILURES, errorMessage);
         }
+    }
+    
+    private String findAnalyzerId(AnalyzerInfo targetAnalyzer) {
+        for (Map.Entry<String, AnalyzerInfo> entry : analyzerInfoMap.entrySet()) {
+            if (entry.getValue() == targetAnalyzer) {
+                return entry.getKey();
+            }
+        }
+        return "unknown";
+    }
+    
+    private void logSystemStatus() {
+        long uptime = System.currentTimeMillis() - startTime.get();
+        long totalMessages = totalMessagesProcessed.get();
+        long queued = packetsQueued.get();
+        long processed = packetsProcessed.get();
+        long dropped = packetsDropped.get();
+        
+        double packetsPerSec = processed > 0 ? (processed * 1000.0) / uptime : 0;
+        double messagesPerSec = totalMessages > 0 ? (totalMessages * 1000.0) / uptime : 0;
+        
+        log.info("SYSTEM_STATUS | uptime_ms={} | queued={} | processed={} | dropped={} | total_messages={} | packets_per_sec={:.2f} | messages_per_sec={:.2f} | queue_size={}", 
+                uptime, queued, processed, dropped, totalMessages, packetsPerSec, messagesPerSec, packetQueue.size());
+        
+        logMessageDistribution();
     }
     
     private void logMessageDistribution() {
         long totalMessages = totalMessagesProcessed.get();
         if (totalMessages == 0) return;
-        
-        StringBuilder distribution = new StringBuilder();
-        distribution.append("MESSAGE DISTRIBUTION: ");
         
         for (Map.Entry<String, AnalyzerInfo> entry : analyzerInfoMap.entrySet()) {
             AnalyzerInfo analyzer = entry.getValue();
@@ -396,10 +417,8 @@ public class DistributorServiceImpl implements DistributorService {
             double percentage = (messages * 100.0) / totalMessages;
             double expectedPercentage = analyzer.getWeight() * 100.0;
             
-            distribution.append(String.format("%s: %d msgs (%.1f%%, target: %.1f%%) ", 
-                    entry.getKey(), messages, percentage, expectedPercentage));
+            log.info("MESSAGE_DISTRIBUTION | analyzer={} | messages={} | percentage={:.1f} | target={:.1f} | weight={:.1f}", 
+                    entry.getKey(), messages, percentage, expectedPercentage, analyzer.getWeight());
         }
-        
-        log.info(distribution.toString());
     }
 }
