@@ -247,6 +247,14 @@ curl -X POST http://localhost:8080/api/v1/logs \
 
 **Important**: This system distributes based on the **total number of log messages processed** by each analyzer, not the number of packets.
 
+### Key Assumptions
+- **Packet Atomicity**: All messages in a packet go to the same analyzer (no splitting)
+- **Eventual Consistency**: ±2% weight distribution tolerance is acceptable
+- **Network Reliability**: HTTP communication within Docker network is stable
+- **Static Configuration**: Analyzer weights don't change during runtime
+- **Resource Bounds**: 50K in-memory queue capacity handles burst traffic
+- **Performance Priority**: Throughput prioritized over strict latency guarantees
+
 ### Weight Configuration
 - **Analyzer-1**: Weight 0.1 (10% of messages)
 - **Analyzer-2**: Weight 0.2 (20% of messages)

@@ -21,14 +21,33 @@
 
 ### **Core Assumptions**
 - **Packet Atomicity**: All messages within a packet sent to the same analyzer (no packet splitting)
-- **Best-Effort Distribution**: Temporary weight imbalances acceptable; eventual consistency prioritized
+- **Best-Effort Distribution**: Temporary weight imbalances acceptable; eventual consistency prioritized (±2% tolerance)
 - **Stateless Processing**: No ordering guarantees required between packets or messages
 - **Resource Bounds**: System operates within single-machine memory constraints (50K queue capacity)
+- **Network Reliability**: HTTP communication between services is reliable within Docker network
+- **Configuration Stability**: Analyzer weights and endpoints don't change during runtime
+- **Agent ID Uniqueness**: Each emitter has a unique and stable agent ID
+- **JSON Serialization**: Performance overhead of JSON is acceptable vs binary protocols
 
 ### **Performance Trade-offs**
-- **Latency vs. Throughput**: Prioritized throughput with acceptable latency (~100ms P95)
+- **Latency vs. Throughput**: Prioritized throughput with acceptable latency (~12ms average)
 - **Memory vs. Persistence**: In-memory queuing for speed over durability guarantees
 - **Consistency vs. Availability**: Eventual weight consistency over strict real-time adherence
+
+### **System Configuration Assumptions**
+- **Failure Detection**: 3 consecutive HTTP failures indicate analyzer is offline
+- **Recovery Timeout**: 30-second offline timeout before attempting recovery
+- **Emergency Threshold**: 1000-message deficit triggers emergency catch-up routing
+- **Thread Pool Sizing**: 50/200 core/max threads optimal for I/O-bound HTTP operations
+- **Health Check Frequency**: 30-second intervals with 10-second timeouts sufficient
+- **Queue Processing**: 100-packet intervals for performance logging are appropriate
+
+### **Deployment Assumptions**
+- **Container Environment**: Docker Compose with custom network for service discovery
+- **Port Allocation**: Static port mapping (8080-8084) available and not conflicting
+- **Environment Variables**: Configuration via environment variables is acceptable
+- **Log Volume**: Structured logging volume doesn't impact system performance significantly
+- **External Dependencies**: No external databases or message queues required for core functionality
 
 ## Failure Handling Strategy
 

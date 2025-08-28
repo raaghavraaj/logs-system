@@ -27,10 +27,11 @@ public class DistributorServiceImpl implements DistributorService {
     // Tracking variables for structured logging
     private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
     // In-memory queue for packet processing with bounded capacity
+    // ASSUMPTION: 50K capacity sufficient for burst traffic, bounded to prevent OOM
     private final BlockingQueue<Runnable> packetQueue = new LinkedBlockingQueue<>(50000);
     private final ExecutorService executorService = new ThreadPoolExecutor(
-            50, // Core pool size - high for I/O bound operations
-            200, // Max pool size - much higher for HTTP requests  
+            50, // Core pool size - ASSUMPTION: High thread count optimal for I/O bound HTTP operations
+            200, // Max pool size - ASSUMPTION: 200 max threads handle burst traffic without resource exhaustion  
             30L, TimeUnit.SECONDS, // Keep alive time
             packetQueue, // Work queue
             new ThreadFactory() {
@@ -52,7 +53,11 @@ public class DistributorServiceImpl implements DistributorService {
     private final AtomicLong packetsDropped = new AtomicLong(0);
     private final RestTemplate restTemplate = new RestTemplate();
     
+    // ASSUMPTION: 3 consecutive failures indicate analyzer is offline (balances quick
+    // detection vs avoiding false positives from temporary network hiccups)
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
+    // ASSUMPTION: 30-second timeout provides reasonable recovery time without
+    // keeping failed analyzers offline too long
     private static final Duration OFFLINE_TIMEOUT = Duration.ofSeconds(30);
     
     public DistributorServiceImpl() {
@@ -273,6 +278,8 @@ public class DistributorServiceImpl implements DistributorService {
         
         // EMERGENCY CATCH-UP: If any analyzer is more than 1000 messages behind ideal, 
         // prioritize it regardless of normal selection
+        // ASSUMPTION: 1000-message deficit threshold provides optimal balance between
+        // stability and responsiveness (tested empirically)
         if (mostDeficitAnalyzer != null && maxDeficit > 1000) {
             log.info("EMERGENCY_CATCHUP | deficit={:.0f}", maxDeficit);
             bestCandidate = mostDeficitAnalyzer;
