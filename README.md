@@ -6,15 +6,15 @@ A production-ready, scalable logs distribution system with weighted load balanci
 
 ## 🎯 System Overview
 
-This system implements a high-performance logs distributor that receives log packets from multiple emitters and routes them to analyzers based on configurable weights. The system features message-based distribution (not packet-based), comprehensive metrics, real-time monitoring, and production-grade reliability.
+This system implements a high-performance logs distributor that receives log packets from multiple emitters and routes them to analyzers based on configurable weights. The system features message-based distribution (not packet-based), structured logging for observability, and production-grade reliability.
 
 ### Key Features
 - **Message-Based Weighted Distribution**: Ensures analyzers process log messages proportional to their weights
-- **High-Throughput Processing**: 35+ messages/second with 0% error rate
-- **Comprehensive Monitoring**: Real-time dashboards, metrics, and alerting
-- **Production-Ready**: Docker deployment, health checks, circuit breakers
-- **Extensive Testing**: Unit tests, integration tests, performance benchmarks
-- **Prometheus Integration**: Industry-standard metrics export
+- **High-Throughput Processing**: 700+ messages/second with 0% error rate
+- **Structured Logging**: Easy-to-parse structured logs for monitoring and analytics
+- **Production-Ready**: Docker deployment, health checks, failure detection and recovery
+- **Simple Observability**: Log parsing scripts for real-time system monitoring
+- **Extensible Architecture**: Easy to add new analyzers or modify distribution logic
 
 ## 🏗️ Architecture
 
@@ -24,26 +24,25 @@ This system implements a high-performance logs distributor that receives log pac
 │                 │    │                 │    │                 │
 │ • Steady        │    │ • Load Balancer │    │ • Analyzer-1    │
 │ • Bursty        │    │ • Queue Manager │    │ • Analyzer-2    │  
-│ • Heavy Load    │    │ • Metrics       │    │ • Analyzer-3    │
-└─────────────────┘    │ • Health Checks │    │ • Analyzer-4    │
+│ • Heavy Load    │    │ • Failure Detect│    │ • Analyzer-3    │
+│ • (Stress)      │    │ • Structured    │    │ • Analyzer-4    │
+└─────────────────┘    │   Logging       │    └─────────────────┘
+                       └─────────────────┘              │
+                                                        │
+                                                        ▼
+                       ┌─────────────────┐    ┌─────────────────┐
+                       │ Log Parsing     │    │ Simple Stats    │
+                       │ Scripts         │    │ Endpoints       │
+                       │ • parse_logs.sh │    │ • /health       │
+                       │ • monitor_sys.sh│    │ • /stats        │
                        └─────────────────┘    └─────────────────┘
-
-                              │
-                              ▼
-                       ┌─────────────────┐
-                       │  Monitoring     │
-                       │                 │
-                       │ • Dashboards    │
-                       │ • Prometheus    │
-                       │ • Alerts        │
-                       └─────────────────┘
 ```
 
 ### Components
-1. **Distributor Service**: Core routing service with weighted load balancing
+1. **Distributor Service**: Core routing service with weighted load balancing and structured logging
 2. **Analyzer Services**: 4 instances with configurable weights (0.1, 0.2, 0.3, 0.4)
-3. **Emitter Services**: 3 Python-based log generators (steady, bursty, heavy)
-4. **Monitoring Stack**: Metrics, dashboards, health checks, alerting
+3. **Emitter Services**: 3+ Python-based log generators (steady, bursty, heavy, optional stress)
+4. **Observability Tools**: Log parsing scripts, health endpoints, simple statistics
 
 ## 🚀 Quick Start
 
@@ -101,30 +100,33 @@ curl http://localhost:8080/api/v1/metrics/dashboard
   Queue Size: 1
   Total Messages: 66,854
 
-🔗 ADDITIONAL METRICS:
-  - Full Metrics: /actuator/metrics
-  - Prometheus: /actuator/prometheus
-  - Health Check: /actuator/health
-  - Application Info: /actuator/info
+🔗 AVAILABLE ENDPOINTS:
+  - Health Check: /api/v1/health
+  - Analyzer Statistics: /api/v1/stats (per analyzer)
+  - Simple log-based monitoring with parse_logs.sh
 
-🎯 ANALYZER METRICS:
-  - Per-analyzer metrics available in /actuator/metrics
-  - Filter by tag 'analyzer' for specific analyzer data
+🎯 STRUCTURED LOGGING:
+  - All events logged in structured format: EVENT_TYPE | key=value | key=value
+  - Easy parsing with standard tools (awk, grep, jq)
+  - Real-time analysis with provided scripts
 ```
 
-#### 2. Performance JSON API
+#### 2. Simple Log Analysis
 ```bash
-curl http://localhost:8080/api/v1/metrics/performance | jq .
+# Parse recent distributor activity
+./parse_logs.sh distributor 5
+
+# Real-time system monitoring  
+./monitor_system.sh
 ```
 **Example Output:**
-```json
-{
-  "queueSize": 1.0,
-  "packetsPerSecond": 12.009433141601088,
-  "totalMessages": 66854.0,
-  "errorRate": 0.0,
-  "messagesPerSecond": 35.46125247908919
-}
+```
+📊 REAL-TIME PERFORMANCE:
+  Analyzer-1: 73.60 msgs/sec (13721 total)
+  Analyzer-2: 145.11 msgs/sec (27112 total)
+  Analyzer-3: 209.51 msgs/sec (39173 total)
+  Analyzer-4: 288.18 msgs/sec (53909 total)
+  📈 TOTAL SYSTEM: 716.40 messages/second
 ```
 
 #### 3. Individual Analyzer Statistics
@@ -152,15 +154,23 @@ Performance Metrics:
   Uptime: 1901 seconds
 ```
 
-#### 4. System Alerts
+#### 4. Error Monitoring
 ```bash
-curl http://localhost:8080/api/v1/metrics/alerts | jq .
+# Check for recent errors across all services
+./monitor_system.sh | grep "ERROR MONITORING" -A 10
+
+# Analyze specific service errors
+./parse_logs.sh distributor 10 | grep "ERROR ANALYSIS" -A 5
 ```
 
-### Prometheus Integration
-Export metrics to Prometheus/Grafana:
+### External Tool Integration
+Structured logs can be easily consumed by external tools:
 ```bash
-curl http://localhost:8080/actuator/prometheus
+# Export logs for external analysis
+docker logs logs-distributor | grep "PACKET_" > distributor_events.log
+
+# Parse with jq, awk, or other tools
+docker logs logs-distributor | grep "SYSTEM_STATUS" | tail -1
 ```
 
 ## 🧪 Testing & Validation
