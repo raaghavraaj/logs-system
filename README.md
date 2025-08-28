@@ -54,137 +54,220 @@ This system implements a high-performance logs distributor that receives log pac
 
 ### 1. Start the Complete System
 ```bash
-# Clone and start all services
+# Clone and start all services (distributor + 4 analyzers + 3 emitters)
 git clone <repository>
 cd logs-system
 docker-compose up -d
 
-# Verify all services are healthy
+# Verify all services are running
 docker-compose ps
+
+# View real-time logs from all services
+docker-compose logs -f
 ```
 
 ### 2. Check System Health
 ```bash
 # Health check all services
-curl http://localhost:8080/actuator/health
-curl http://localhost:8081/actuator/health
-curl http://localhost:8082/actuator/health
-curl http://localhost:8083/actuator/health
-curl http://localhost:8084/actuator/health
+curl -s http://localhost:8080/api/v1/health  # Distributor
+curl -s http://localhost:8081/api/v1/health  # Analyzer-1
+curl -s http://localhost:8082/api/v1/health  # Analyzer-2
+curl -s http://localhost:8083/api/v1/health  # Analyzer-3
+curl -s http://localhost:8084/api/v1/health  # Analyzer-4
+
+# All should return: "Distributor is online" or "Analyzer is online and healthy"
 ```
 
-### 3. View Real-Time Dashboards
-Open in your browser:
-- **Main Dashboard**: http://localhost:8080/api/v1/metrics/dashboard
-- **Performance Metrics**: http://localhost:8080/api/v1/metrics/performance
-- **System Health**: http://localhost:8080/actuator/health
-- **Analyzer Stats**: http://localhost:8081/api/v1/stats
-
-## 📊 Monitoring & Dashboards
-
-### Built-in Dashboards
-The system includes comprehensive monitoring with multiple dashboard types:
-
-#### 1. Main Metrics Dashboard
+### 3. Monitor System Performance
 ```bash
-curl http://localhost:8080/api/v1/metrics/dashboard
+# Complete real-time dashboard
+./monitor_system.sh
+
+# Parse recent activity (last 5 minutes)
+./parse_logs.sh distributor 5
+
+# Check distribution accuracy
+./test-system.sh distribution
 ```
-**Example Output:**
-```
-=== LOGS DISTRIBUTOR METRICS DASHBOARD ===
+## 📊 Testing & Monitoring Commands
 
-📊 PERFORMANCE METRICS:
-  Packets/sec: 12.01
-  Messages/sec: 35.46
-  Error Rate: 0.00%
-  Queue Size: 1
-  Total Messages: 66,854
-
-🔗 AVAILABLE ENDPOINTS:
-  - Health Check: /api/v1/health
-  - Analyzer Statistics: /api/v1/stats (per analyzer)
-  - Simple log-based monitoring with parse_logs.sh
-
-🎯 STRUCTURED LOGGING:
-  - All events logged in structured format: EVENT_TYPE | key=value | key=value
-  - Easy parsing with standard tools (awk, grep, jq)
-  - Real-time analysis with provided scripts
-```
-
-#### 2. Detailed Log Analysis
+### Quick System Verification
 ```bash
-# Parse recent distributor activity (last 10 minutes)
+# 1. Start the system
+docker-compose up -d
+
+# 2. Verify all services are healthy (should return "online")
+curl -s http://localhost:8080/api/v1/health && echo " ✅ Distributor"
+curl -s http://localhost:8081/api/v1/health && echo " ✅ Analyzer-1"
+curl -s http://localhost:8082/api/v1/health && echo " ✅ Analyzer-2"
+curl -s http://localhost:8083/api/v1/health && echo " ✅ Analyzer-3"
+curl -s http://localhost:8084/api/v1/health && echo " ✅ Analyzer-4"
+
+# 3. Check real-time performance
+./monitor_system.sh
+```
+
+### Real-time System Monitoring
+```bash
+# Complete system dashboard with health, performance, and distribution
+./monitor_system.sh
+
+# Example output:
+# 🚀 LOGS SYSTEM MONITORING DASHBOARD
+# 🏥 SYSTEM HEALTH: ✅ All services online  
+# 📊 REAL-TIME PERFORMANCE: 700+ messages/second total
+# ⚠️ ERROR MONITORING: ✅ No errors detected
+# ⚖️ LOAD DISTRIBUTION: Showing per-analyzer packet counts
+```
+
+### Log Analysis & Metrics
+```bash
+# Analyze distributor activity (last 10 minutes)
 ./parse_logs.sh distributor 10
 
-# Analyze specific analyzer logs
+# Analyze specific analyzer performance (last 5 minutes)  
 ./parse_logs.sh analyzer-1 5
-```
-**Example Output:**
-```
-📦 PACKET METRICS:
-  Received: 29482 packets
-  Processed: 29482 packets  
-  Dropped: 0 packets
-  Total Messages: 87564
 
-🎯 ANALYZER DISTRIBUTION:
-  analyzer-1: 3693 packets
-  analyzer-2: 6440 packets
-  analyzer-3: 8785 packets
-  analyzer-4: 10564 packets
-
-⚠️  ERROR ANALYSIS:
-  ✅ No errors or warnings found
+# Expected output includes:
+# 📦 PACKET METRICS: received/processed/dropped counts
+# 🎯 ANALYZER DISTRIBUTION: packets per analyzer
+# ⚠️ ERROR ANALYSIS: any errors or warnings
 ```
 
-#### 3. Individual Analyzer Statistics
+### Performance Testing
 ```bash
-curl http://localhost:8081/api/v1/stats
-```
-**Example Output:**
-```
-=== ANALYZER analyzer-1 STATISTICS ===
-Total Packets Processed: 2948
-Total Messages Processed: 7071
-Messages by Level:
-  ERROR: 538
-  INFO: 2515
-  DEBUG: 2790
-  FATAL: 127
-  WARN: 1101
-Top Agents:
-  heavy-load-emitter: 4371 messages
-  steady-emitter: 1875 messages
-  bursty-emitter: 825 messages
-Performance Metrics:
-  Packets/sec: 1.55
-  Messages/sec: 3.72
-  Uptime: 1901 seconds
+# Send a manual test packet to verify system works
+curl -X POST http://localhost:8080/api/v1/logs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "packetId": "test-001",
+    "agentId": "manual-test", 
+    "totalMessages": 2,
+    "messages": [
+      {"level": "INFO", "message": "Test message 1"},
+      {"level": "ERROR", "message": "Test message 2"}
+    ]
+  }'
+
+# Verify the packet was processed by checking logs
+./parse_logs.sh distributor 1 | grep "test-001"
+
+# Check load distribution accuracy
+./test-system.sh distribution
+
+# Run full integration tests
+./integration-tests.sh
+
+# Professional load testing with JMeter
+cd jmeter && ./run-jmeter-tests.sh
 ```
 
-#### 4. Error Monitoring
+### Get Detailed Statistics & Metrics
 ```bash
-# Check for recent errors across all services
-./monitor_system.sh | grep "ERROR MONITORING" -A 10
+# Individual analyzer statistics with performance metrics
+curl -s http://localhost:8081/api/v1/stats  # Analyzer-1 detailed stats
+curl -s http://localhost:8082/api/v1/stats  # Analyzer-2 detailed stats
+curl -s http://localhost:8083/api/v1/stats  # Analyzer-3 detailed stats
+curl -s http://localhost:8084/api/v1/stats  # Analyzer-4 detailed stats
 
-# Analyze specific service errors
-./parse_logs.sh distributor 10 | grep "ERROR ANALYSIS" -A 5
+# Example output per analyzer:
+# === ANALYZER analyzer-1 STATISTICS ===
+# Total Packets Processed: 5,432
+# Total Messages Processed: 15,876  
+# Messages/sec: 85.4
+# Messages by Level: ERROR: 1,234, INFO: 8,765, DEBUG: 5,432...
+# Performance Metrics: Packets/sec: 32.1, Uptime: 186 seconds
 ```
 
-### External Tool Integration
-Structured logs can be easily consumed by external monitoring systems:
+### Export Metrics for External Tools
 ```bash
-# Export logs for external analysis (ELK, Splunk, etc.)
-docker logs logs-distributor | grep "PACKET_" > distributor_events.log
+# Export structured logs for ELK Stack, Splunk, etc.
+docker logs logs-distributor > distributor_logs.json
+docker logs logs-analyzer-1 > analyzer1_logs.json
 
-# Example structured log format:
+# Filter specific events for analysis
+docker logs logs-distributor | grep "PACKET_RECEIVED" > packet_events.log
+docker logs logs-distributor | grep "SYSTEM_STATUS" > performance_metrics.log
+
+# Real-time streaming for external monitoring
+docker logs logs-distributor -f | grep "PACKET_" | tee live_metrics.log
+
+# Structured log format examples:
 # PACKET_RECEIVED | packet_id=abc123 | messages=5 | agent_id=emitter-1 | timestamp=2025-08-28T17:12:35
-# PACKET_QUEUED | packet_id=abc123 | target_analyzer=analyzer-2 | queue_size=1 | messages=5
+# PACKET_QUEUED | packet_id=abc123 | target_analyzer=analyzer-2 | queue_size=1 | messages=5  
 # PACKET_SENT_SUCCESS | packet_id=abc123 | analyzer=analyzer-2 | messages=5 | duration_ms=12
+```
 
-# Parse with standard Unix tools
-docker logs logs-distributor | grep "SYSTEM_STATUS" | tail -1
-docker logs logs-analyzer-1 | grep "PACKET_PROCESSED" | wc -l
+### Troubleshooting Commands
+```bash
+# Check for errors in the last hour
+./parse_logs.sh distributor 60 | grep "ERROR\|WARN"
+
+# Monitor system performance and queue health
+./monitor_system.sh | grep "PERFORMANCE" -A 10
+
+# Check Docker container resource usage
+docker stats
+
+# View recent distributor logs  
+docker logs logs-distributor --tail 50
+
+# Test network connectivity between services
+docker exec logs-distributor curl -s http://analyzer-1:8080/api/v1/health
+
+# Restart system if needed
+docker-compose down && docker-compose up -d
+```
+
+### Advanced Testing Options
+```bash
+# High-throughput stress testing (adds emitter-stress service)
+docker-compose --profile stress up -d
+
+# Test with custom analyzer weights
+ANALYZERS_CONFIG="test-1:http://analyzer-1:8080/api/v1/analyze:0.3,test-2:http://analyzer-2:8080/api/v1/analyze:0.7" \
+docker-compose up -d distributor
+
+# Scale emitter services for load testing
+docker-compose up -d --scale emitter-steady=3
+
+# Test failure handling and recovery
+docker-compose stop analyzer-1    # Simulate analyzer failure
+./monitor_system.sh               # Observe failure detection
+docker-compose start analyzer-1   # Test automatic recovery
+./monitor_system.sh               # Verify recovery
+
+# View system performance during tests
+watch -n 2 ./monitor_system.sh
+```
+
+### Complete Test Workflow
+```bash
+# 1. Full system startup and validation
+docker-compose up -d
+sleep 30  # Allow system to stabilize
+./monitor_system.sh
+
+# 2. Send test traffic and verify processing  
+curl -X POST http://localhost:8080/api/v1/logs -H "Content-Type: application/json" \
+  -d '{"packetId":"test","agentId":"test","totalMessages":1,"messages":[{"level":"INFO","message":"Test"}]}'
+
+# 3. Verify distribution accuracy
+./test-system.sh distribution
+
+# 4. Check performance metrics
+for i in {1..4}; do 
+  echo "Analyzer-$i stats:" 
+  curl -s http://localhost:808$i/api/v1/stats | grep "Messages/sec\|Total Messages"
+done
+
+# 5. Run comprehensive tests
+./integration-tests.sh
+cd jmeter && ./run-jmeter-tests.sh
+
+# 6. System cleanup
+docker-compose down
+echo "✅ Complete system test workflow finished!"
 ```
 
 ## 🧪 Testing & Validation
