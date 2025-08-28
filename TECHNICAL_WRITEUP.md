@@ -44,20 +44,20 @@
 ## Testing Strategy & Validation
 
 ### **Multi-Layered Testing Approach**
-1. **Unit Tests**: Core distribution logic, metrics collection, data model validation
-2. **Integration Tests**: Multi-service interactions, failure scenarios, recovery testing
-3. **Performance Tests**: JMeter professional load testing (50-400 concurrent requests)
-4. **System Tests**: End-to-end weighted distribution validation
+1. **Integration Tests**: Multi-service interactions, failure scenarios, recovery testing using bash scripts
+2. **Performance Tests**: JMeter professional load testing (50-400 concurrent requests)  
+3. **System Tests**: End-to-end weighted distribution validation via log analysis
+4. **Monitoring Tests**: Structured log parsing and system health validation
 
 ### **Validation Methodology**
-- **Weight Distribution**: Automated verification that message ratios converge to configured weights (±5% tolerance)
-- **Performance Baselines**: P95 latency < 500ms, throughput > 25 req/sec under 20-user load
-- **Failure Recovery**: Analyzer offline/online scenarios with automatic re-balancing
+- **Weight Distribution**: Automated verification via log parsing that message ratios converge to configured weights (±2% tolerance)
+- **Performance Baselines**: Average latency ~12ms, throughput > 700 messages/sec under high load
+- **Failure Recovery**: Analyzer offline/online scenarios with automatic re-balancing verified through structured logs
 
 ## Production Readiness Considerations
 
 ### **Implemented for Scale**
-- **Metrics**: Comprehensive Prometheus/Micrometer integration for observability
+- **Observability**: Structured logging with easy parsing and external tool integration
 - **Health Checks**: Docker-native and application-level health monitoring
 - **Configuration**: Environment-driven analyzer configuration for deployment flexibility
 - **Containerization**: Multi-stage Docker builds with optimized images
@@ -96,6 +96,32 @@
 
 This system demonstrates production-grade distributed systems design with emphasis on reliability, observability, and operational simplicity while maintaining high throughput and weighted distribution accuracy.
 
+## Future Improvements & Advanced Features
+
+### **Advanced Metrics & Monitoring** 
+*Available for future implementation based on operational requirements:*
+
+- **Prometheus Integration**: Implement Spring Boot Actuator + Micrometer for comprehensive metrics collection
+- **Real-time Dashboards**: Grafana dashboards with custom metrics for throughput, latency, and distribution accuracy
+- **Advanced Alerting**: PagerDuty/Slack integration for automatic incident response
+- **Distributed Tracing**: Jaeger integration for request flow tracking across services
+- **APM Integration**: DataDog/New Relic for production monitoring
+
+**Current Alternative**: Structured logging provides metrics via log parsing tools and external monitoring systems.
+
+### **Scalability Enhancements**
+- **Message Queuing**: Apache Kafka/RabbitMQ for better decoupling and persistence
+- **Service Discovery**: Consul/etcd for dynamic analyzer registration
+- **Horizontal Scaling**: Multiple distributor instances with consistent hashing
+- **Database Integration**: Persistent state management for weights and configuration
+- **Multi-Region Support**: Geographic distribution with latency-aware routing
+
+### **Advanced Testing & Validation**
+- **Unit Test Suite**: Comprehensive test coverage for all components with mocking
+- **Chaos Engineering**: Automated failure injection testing (e.g., using Chaos Monkey)
+- **Benchmark Suites**: Automated performance regression testing
+- **Property-Based Testing**: Advanced test case generation for edge scenarios
+
 ## Architectural Evolution: Metrics Simplification
 
 ### **Decision: Replace Complex Metrics with Structured Logging**
@@ -118,7 +144,7 @@ This system demonstrates production-grade distributed systems design with emphas
 ### **Trade-offs Accepted**
 - **Lost**: Real-time metrics dashboard, Prometheus integration, automatic alerting
 - **Gained**: Simplicity, reduced resource usage, tool independence, easier debugging
-- **Conclusion**: For this system's requirements, structured logging provides better value than complex metrics infrastructure
+- **Conclusion**: For this system's requirements, structured logging provides better value than complex metrics infrastructure. Advanced metrics can be re-implemented as future enhancements when operational scale demands it.
 
 ## Performance Benchmarks & Testing Results
 

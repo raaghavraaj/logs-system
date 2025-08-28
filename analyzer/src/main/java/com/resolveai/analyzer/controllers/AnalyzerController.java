@@ -1,7 +1,6 @@
 package com.resolveai.analyzer.controllers;
 
 import com.resolveai.analyzer.models.LogPacket;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

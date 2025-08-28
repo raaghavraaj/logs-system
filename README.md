@@ -111,22 +111,30 @@ curl http://localhost:8080/api/v1/metrics/dashboard
   - Real-time analysis with provided scripts
 ```
 
-#### 2. Simple Log Analysis
+#### 2. Detailed Log Analysis
 ```bash
-# Parse recent distributor activity
-./parse_logs.sh distributor 5
+# Parse recent distributor activity (last 10 minutes)
+./parse_logs.sh distributor 10
 
-# Real-time system monitoring  
-./monitor_system.sh
+# Analyze specific analyzer logs
+./parse_logs.sh analyzer-1 5
 ```
 **Example Output:**
 ```
-📊 REAL-TIME PERFORMANCE:
-  Analyzer-1: 73.60 msgs/sec (13721 total)
-  Analyzer-2: 145.11 msgs/sec (27112 total)
-  Analyzer-3: 209.51 msgs/sec (39173 total)
-  Analyzer-4: 288.18 msgs/sec (53909 total)
-  📈 TOTAL SYSTEM: 716.40 messages/second
+📦 PACKET METRICS:
+  Received: 29482 packets
+  Processed: 29482 packets  
+  Dropped: 0 packets
+  Total Messages: 87564
+
+🎯 ANALYZER DISTRIBUTION:
+  analyzer-1: 3693 packets
+  analyzer-2: 6440 packets
+  analyzer-3: 8785 packets
+  analyzer-4: 10564 packets
+
+⚠️  ERROR ANALYSIS:
+  ✅ No errors or warnings found
 ```
 
 #### 3. Individual Analyzer Statistics
@@ -164,13 +172,19 @@ Performance Metrics:
 ```
 
 ### External Tool Integration
-Structured logs can be easily consumed by external tools:
+Structured logs can be easily consumed by external monitoring systems:
 ```bash
-# Export logs for external analysis
+# Export logs for external analysis (ELK, Splunk, etc.)
 docker logs logs-distributor | grep "PACKET_" > distributor_events.log
 
-# Parse with jq, awk, or other tools
+# Example structured log format:
+# PACKET_RECEIVED | packet_id=abc123 | messages=5 | agent_id=emitter-1 | timestamp=2025-08-28T17:12:35
+# PACKET_QUEUED | packet_id=abc123 | target_analyzer=analyzer-2 | queue_size=1 | messages=5
+# PACKET_SENT_SUCCESS | packet_id=abc123 | analyzer=analyzer-2 | messages=5 | duration_ms=12
+
+# Parse with standard Unix tools
 docker logs logs-distributor | grep "SYSTEM_STATUS" | tail -1
+docker logs logs-analyzer-1 | grep "PACKET_PROCESSED" | wc -l
 ```
 
 ## 🧪 Testing & Validation
@@ -190,18 +204,19 @@ The system includes comprehensive testing capabilities:
 ./test-system.sh distribution
 ```
 
-#### 2. Unit Tests
+#### 2. Manual Testing
 ```bash
-# Distributor service tests
-cd distributor
-./mvnw test
+# Test distributor health
+curl http://localhost:8080/api/v1/health
 
-# Analyzer service tests  
-cd ../analyzer
-./mvnw test
+# Test analyzer health  
+curl http://localhost:8081/api/v1/health
+curl http://localhost:8082/api/v1/health
+curl http://localhost:8083/api/v1/health
+curl http://localhost:8084/api/v1/health
 ```
 
-#### 3. Manual Testing
+#### 3. Send Test Log Packet
 ```bash
 # Send a test log packet
 curl -X POST http://localhost:8080/api/v1/logs \
@@ -386,29 +401,35 @@ docker-compose up -d --build
 #### Distribution Issues
 ```bash
 # Check analyzer connectivity
-curl http://localhost:8081/actuator/health
-curl http://localhost:8082/actuator/health
-curl http://localhost:8083/actuator/health  
-curl http://localhost:8084/actuator/health
+curl http://localhost:8081/api/v1/health
+curl http://localhost:8082/api/v1/health
+curl http://localhost:8083/api/v1/health  
+curl http://localhost:8084/api/v1/health
 
-# View distribution debug logs
-docker-compose logs distributor | grep "DISTRIBUTION DECISION" | tail -10
+# View distribution logs
+./parse_logs.sh distributor 5 | grep "ANALYZER DISTRIBUTION"
+
+# Check for errors
+./monitor_system.sh | grep "ERROR MONITORING" -A 5
 ```
 
 #### Performance Issues
 ```bash
-# Check system metrics
-curl http://localhost:8080/api/v1/metrics/alerts | jq .
+# Check system performance
+./monitor_system.sh
 
-# Monitor queue size
-curl http://localhost:8080/api/v1/metrics/performance | jq .queueSize
+# Monitor log parsing
+./parse_logs.sh distributor 10
 
 # Check resource usage
 docker stats
+
+# Check container logs
+docker logs logs-distributor | tail -20
 ```
 
 ### Health Monitoring
-The system includes comprehensive health monitoring and automatic failure recovery. For details on circuit breaker patterns and recovery mechanisms, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
+The system includes automatic failure detection and recovery using structured logging. Use `./monitor_system.sh` for real-time health monitoring. For details on circuit breaker patterns and recovery mechanisms, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
 
 ## 📝 Testing
 
