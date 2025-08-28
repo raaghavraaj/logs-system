@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -26,11 +27,11 @@ public class DistributorServiceImpl implements DistributorService {
     
     private final MetricsService metricsService;
     // In-memory queue for packet processing with bounded capacity
-    private final BlockingQueue<Runnable> packetQueue = new LinkedBlockingQueue<>(10000);
+    private final BlockingQueue<Runnable> packetQueue = new LinkedBlockingQueue<>(50000);
     private final ExecutorService executorService = new ThreadPoolExecutor(
-            4 * Runtime.getRuntime().availableProcessors(), // Core pool size
-            8 * Runtime.getRuntime().availableProcessors(), // Max pool size  
-            60L, TimeUnit.SECONDS, // Keep alive time
+            50, // Core pool size - high for I/O bound operations
+            200, // Max pool size - much higher for HTTP requests  
+            30L, TimeUnit.SECONDS, // Keep alive time
             packetQueue, // Work queue
             new ThreadFactory() {
                 private final AtomicInteger threadNumber = new AtomicInteger(1);
@@ -211,9 +212,9 @@ public class DistributorServiceImpl implements DistributorService {
 
     /**
      * This method chooses the best analyzer based on weighted distribution with aggressive catch-up
-     * for severely underutilized analyzers
+     * for severely underutilized analyzers. Uses lock-free algorithm for better concurrency.
      */
-    synchronized AnalyzerInfo findBestAnalyzer(int packetMessageCount) {
+    AnalyzerInfo findBestAnalyzer(int packetMessageCount) {
         // Check if any offline analyzers should be reconsidered
         checkForRecoveredAnalyzers();
 

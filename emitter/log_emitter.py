@@ -216,7 +216,8 @@ class LogEmitter:
                 
                 # Wait based on emission rate (adjusted for burst)
                 delay = (1.0 / self.emission_rate) / packets_to_send
-                time.sleep(max(0.1, delay))  # Minimum 0.1s delay
+                if delay > 0.001:  # Only delay if meaningful (>1ms)
+                    time.sleep(delay)
                 
         except KeyboardInterrupt:
             print(f"\n🛑 Emitter stopped by user")
