@@ -27,10 +27,10 @@
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
         <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControllerGui" testclass="LoopController" testname="Loop Controller" enabled="true">
           <boolProp name="LoopController.continue_forever">false</boolProp>
-          <stringProp name="LoopController.loops">10</stringProp>
+          <stringProp name="LoopController.loops">1</stringProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">5</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">10</stringProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">0</stringProp>
         <boolProp name="ThreadGroup.scheduler">false</boolProp>
         <stringProp name="ThreadGroup.duration"></stringProp>
         <stringProp name="ThreadGroup.delay"></stringProp>
@@ -49,7 +49,7 @@
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
           <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">false</boolProp>
           <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
           <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
           <stringProp name="HTTPSampler.connect_timeout"></stringProp>
@@ -59,36 +59,7 @@
             <collectionProp name="Arguments.arguments">
               <elementProp name="" elementType="HTTPArgument">
                 <boolProp name="HTTPArgument.always_encode">false</boolProp>
-                <stringProp name="Argument.value">{
-  "packetId": "jmeter-test-${__threadNum}-${__counter(FALSE)}",
-  "agentId": "jmeter-agent-${__threadNum}",
-  "messages": [
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "${__chooseRandom(DEBUG,INFO,WARN,ERROR,FATAL)}",
-      "source": "jmeter-load-test.test-service-${__threadNum}",
-      "message": "JMeter load test message ${__counter(FALSE)} from thread ${__threadNum}",
-
-    },
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "${__chooseRandom(DEBUG,INFO,WARN,ERROR,FATAL)}",
-      "source": "jmeter-load-test.test-service-${__threadNum}",
-      "message": "Second message in packet ${__counter(FALSE)} from thread ${__threadNum}",
-
-    },
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "${__chooseRandom(DEBUG,INFO,WARN,ERROR,FATAL)}",
-      "source": "jmeter-load-test.test-service-${__threadNum}",
-      "message": "Third message in packet ${__counter(FALSE)} from thread ${__threadNum}",
-
-    }
-  ]
-}</stringProp>
+                <stringProp name="Argument.value">{"agentId":"jmeter-baseline","messages":[{"id":"msg-001","level":"INFO","message":"JMeter baseline test message","agentId":"jmeter-baseline","source":"jmeter-baseline"}]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
@@ -100,6 +71,14 @@
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">Content-Type</stringProp>
                 <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Accept</stringProp>
+                <stringProp name="Header.value">*/*</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">User-Agent</stringProp>
+                <stringProp name="Header.value">curl/8.7.1</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>
@@ -122,8 +101,8 @@
           <boolProp name="LoopController.continue_forever">false</boolProp>
           <stringProp name="LoopController.loops">20</stringProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">20</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">30</stringProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">0</stringProp>
         <boolProp name="ThreadGroup.scheduler">false</boolProp>
         <stringProp name="ThreadGroup.duration"></stringProp>
         <stringProp name="ThreadGroup.delay"></stringProp>
@@ -142,7 +121,7 @@
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
           <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">false</boolProp>
           <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
           <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
           <stringProp name="HTTPSampler.connect_timeout"></stringProp>
@@ -152,53 +131,7 @@
             <collectionProp name="Arguments.arguments">
               <elementProp name="" elementType="HTTPArgument">
                 <boolProp name="HTTPArgument.always_encode">false</boolProp>
-                <stringProp name="Argument.value">{
-  "packetId": "stress-test-${__threadNum}-${__counter(FALSE)}",
-  "agentId": "stress-agent-${__threadNum}",
-
-  "messages": [
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "ERROR",
-      "source": "jmeter-stress-test.stress-service-${__threadNum}",
-      "message": "High volume stress test ERROR message ${__counter(FALSE)}",
-
-    },
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "WARN",
-      "source": "jmeter-stress-test.stress-service-${__threadNum}",
-      "message": "High volume stress test WARN message ${__counter(FALSE)}",
-
-    },
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "INFO",
-      "source": "jmeter-stress-test.stress-service-${__threadNum}",
-      "message": "High volume stress test INFO message ${__counter(FALSE)}",
-
-    },
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "DEBUG",
-      "source": "jmeter-stress-test.stress-service-${__threadNum}",
-      "message": "High volume stress test DEBUG message ${__counter(FALSE)}",
-
-    },
-    {
-      "id": "msg-${__UUID}",
-
-      "level": "FATAL",
-      "source": "jmeter-stress-test.stress-service-${__threadNum}",
-      "message": "High volume stress test FATAL message ${__counter(FALSE)}",
-
-    }
-  ]
-}</stringProp>
+                <stringProp name="Argument.value">{"agentId":"jmeter-stress","messages":[{"id":"stress-001","level":"ERROR","message":"High volume stress test ERROR message","agentId":"jmeter-stress","source":"jmeter-stress"},{"id":"stress-002","level":"WARN","message":"High volume stress test WARN message","agentId":"jmeter-stress","source":"jmeter-stress"}]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
@@ -210,6 +143,14 @@
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">Content-Type</stringProp>
                 <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Accept</stringProp>
+                <stringProp name="Header.value">*/*</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">User-Agent</stringProp>
+                <stringProp name="Header.value">curl/8.7.1</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>

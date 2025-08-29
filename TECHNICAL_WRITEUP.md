@@ -4,17 +4,23 @@
 
 ### **Core Architecture Choice: Message-Based Weighted Distribution**
 **Decision**: Implemented weighted load balancing based on total log messages processed per analyzer, not packet count.
+
 **Rationale**: Packets contain variable message counts (1-100+ messages). Pure packet-based distribution would skew workload toward analyzers receiving larger packets.
+
 **Trade-off**: Increased complexity in tracking cumulative message counts vs. simpler packet counting, but ensures true proportional workload distribution.
 
 ### **Concurrency Model: Async HTTP with Optimized Thread Pool**
 **Decision**: Java 11+ `HttpClient` with async operations + `ThreadPoolExecutor` (20-50 threads) + `LinkedBlockingQueue` (10,000 capacity) + `CallerRunsPolicy`.
+
 **Rationale**: Async HTTP eliminates thread blocking, allowing smaller thread pools for equivalent throughput. Modern HTTP client supports HTTP/2, connection pooling, and non-blocking operations.
+
 **Trade-off**: Reduced thread contention and memory usage while achieving 6,690+ messages/second throughput. Slightly increased complexity vs. traditional blocking HTTP.cl
 
 ### **Distribution Algorithm: Emergency Catch-up Mechanism**
 **Decision**: Hybrid approach combining weight-based selection with deficit correction.
+
 **Implementation**: When an analyzer's message deficit exceeds 1,000, it gets priority selection regardless of weight.
+
 **Trade-off**: Short-term weight deviation vs. long-term proportional accuracy. Ensures no analyzer falls permanently behind.
 
 ## Technical Assumptions & System Constraints
@@ -108,22 +114,30 @@
 
 ### **High-Performance HTTP Communication**
 **Decision**: Java 11+ `HttpClient` with `CompletableFuture` async operations instead of traditional `RestTemplate`.
+
 **Implementation**: Non-blocking HTTP calls with connection pooling, HTTP/2 support, and configurable timeouts.
+
 **Trade-off**: Modern async complexity vs. simple blocking HTTP. Chosen for 10x throughput improvement.
 
 ### **Low-Contention Counters**
 **Decision**: `LongAdder` instead of `AtomicLong` for high-contention counting operations.
+
 **Rationale**: `LongAdder` uses segmented counting to reduce thread contention under high concurrent load.
+
 **Result**: Significant performance improvement in multi-threaded scenarios with frequent counter updates.
 
 ### **Scheduled Health Management**
 **Decision**: Periodic analyzer health checks (5-second intervals) instead of per-packet health verification.
+
 **Rationale**: Eliminates health check overhead from critical packet processing path.
+
 **Trade-off**: Slightly delayed failure detection vs. zero hot-path performance impact.
 
 ### **Async Logging Configuration** 
 **Decision**: Logback `AsyncAppender` with `neverBlock=true` for high-throughput logging.
+
 **Rationale**: Prevents logging I/O from blocking packet processing threads.
+
 **Configuration**: 1024-item queue with no log discarding to maintain observability.
 
 ## Key Design Principles Applied
@@ -167,7 +181,9 @@ This system demonstrates production-grade distributed systems design with emphas
 
 ### **Decision: Replace Complex Metrics with Structured Logging**
 **Context**: Initial implementation used Spring Boot Actuator + Micrometer + Prometheus for comprehensive metrics collection.
+
 **Problem**: Complex metrics infrastructure added significant overhead (~20-30% memory usage) and operational complexity.
+
 **Solution**: Replaced entire metrics stack with structured event logging and simple parsing scripts.
 
 ### **Implementation Details**
@@ -219,7 +235,7 @@ Concurrent Agents: 10 agents × 20 packets → 90%+ success rate
 4. **JMeter Load Tests**: Professional-grade load testing with detailed reporting
 5. **System Tests**: End-to-end validation with realistic traffic patterns
 
-**Why JMeter Over Custom Scripts**: Professional reviewers expect industry-standard tools. JMeter provides:
+**Why JMeter Over Custom Scripts**: JMeter provides:
 - Standardized performance reporting with percentile analysis
 - Visual dashboards and graph generation
 - Scalable load generation with thread management
