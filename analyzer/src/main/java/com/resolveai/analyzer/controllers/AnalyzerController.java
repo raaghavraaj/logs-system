@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -16,22 +16,26 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequestMapping("/api/v1")
 public class AnalyzerController {
     
-    // Simple statistics tracking for logs
-    private final AtomicLong totalPacketsProcessed = new AtomicLong(0);
-    private final AtomicLong totalMessagesProcessed = new AtomicLong(0);
-    private final Map<String, AtomicLong> messagesByLevel = new ConcurrentHashMap<>();
-    private final Map<String, AtomicLong> messagesByAgent = new ConcurrentHashMap<>();
-    private final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
+    // 🚀 HIGH-PERFORMANCE COUNTERS - LongAdder for reduced contention
+    private final LongAdder totalPacketsProcessed = new LongAdder();
+    private final LongAdder totalMessagesProcessed = new LongAdder();
+    private final Map<String, LongAdder> messagesByLevel = new ConcurrentHashMap<>();
+    private final Map<String, LongAdder> messagesByAgent = new ConcurrentHashMap<>();
+    private final LongAdder startTime = new LongAdder();
     
     private final String analyzerId = System.getenv().getOrDefault("ANALYZER_ID", "unknown-analyzer");
     
     public AnalyzerController() {
-        // Initialize level counters
-        messagesByLevel.put("DEBUG", new AtomicLong(0));
-        messagesByLevel.put("INFO", new AtomicLong(0));
-        messagesByLevel.put("WARN", new AtomicLong(0));
-        messagesByLevel.put("ERROR", new AtomicLong(0));
-        messagesByLevel.put("FATAL", new AtomicLong(0));
+        startTime.add(System.currentTimeMillis());
+        
+        // Initialize level counters with LongAdder
+        messagesByLevel.put("DEBUG", new LongAdder());
+        messagesByLevel.put("INFO", new LongAdder());
+        messagesByLevel.put("WARN", new LongAdder());
+        messagesByLevel.put("ERROR", new LongAdder());
+        messagesByLevel.put("FATAL", new LongAdder());
+        
+        log.info("🚀 HIGH-PERFORMANCE ANALYZER INITIALIZED | analyzer_id={}", analyzerId);
     }
 
     @GetMapping("/health")
@@ -41,9 +45,9 @@ public class AnalyzerController {
     
     @GetMapping("/stats")
     public ResponseEntity<String> getStatistics() {
-        long uptime = System.currentTimeMillis() - startTime.get();
-        long packets = totalPacketsProcessed.get();
-        long messages = totalMessagesProcessed.get();
+        long uptime = System.currentTimeMillis() - startTime.sum();
+        long packets = totalPacketsProcessed.sum();
+        long messages = totalMessagesProcessed.sum();
         
         double packetsPerSec = packets > 0 ? (packets * 1000.0) / uptime : 0;
         double messagesPerSec = messages > 0 ? (messages * 1000.0) / uptime : 0;
@@ -54,15 +58,16 @@ public class AnalyzerController {
         stats.append(String.format("Total Messages Processed: %d\n", messages));
         stats.append("Messages by Level:\n");
         
+        // Sort by count (highest first)
         messagesByLevel.entrySet().stream()
-                .sorted(Map.Entry.<String, AtomicLong>comparingByValue((v1, v2) -> Long.compare(v2.get(), v1.get())))
-                .forEach(entry -> stats.append(String.format("  %s: %d\n", entry.getKey(), entry.getValue().get())));
+                .sorted((e1, e2) -> Long.compare(e2.getValue().sum(), e1.getValue().sum()))
+                .forEach(entry -> stats.append(String.format("  %s: %d\n", entry.getKey(), entry.getValue().sum())));
         
         stats.append("Top Agents:\n");
         messagesByAgent.entrySet().stream()
-                .sorted(Map.Entry.<String, AtomicLong>comparingByValue((v1, v2) -> Long.compare(v2.get(), v1.get())))
+                .sorted((e1, e2) -> Long.compare(e2.getValue().sum(), e1.getValue().sum()))
                 .limit(5)
-                .forEach(entry -> stats.append(String.format("  %s: %d messages\n", entry.getKey(), entry.getValue().get())));
+                .forEach(entry -> stats.append(String.format("  %s: %d messages\n", entry.getKey(), entry.getValue().sum())));
         
         stats.append("\nPerformance Metrics:\n");
         stats.append(String.format("  Packets/sec: %.2f\n", packetsPerSec));
@@ -76,35 +81,49 @@ public class AnalyzerController {
     public ResponseEntity<String> analyzeLogPacket(@RequestBody LogPacket logPacket) {
         Instant startTime = Instant.now();
         
-        log.info("PACKET_RECEIVED | analyzer={} | packet_id={} | messages={} | agent_id={} | timestamp={}", 
-                analyzerId, logPacket.getPacketId(), logPacket.getMessages().size(), 
-                logPacket.getAgentId(), startTime);
+        // 🚀 MINIMAL LOGGING in hot path - only essential info
+        if (log.isDebugEnabled()) {
+            log.debug("PACKET_RECV | analyzer={} | id={} | msgs={}", 
+                    analyzerId, logPacket.getPacketId(), logPacket.getMessages().size());
+        }
         
-        // Update counters
-        totalPacketsProcessed.incrementAndGet();
-        totalMessagesProcessed.addAndGet(logPacket.getMessages().size());
+        // 🚀 BATCH COUNTER UPDATES - More efficient than per-message updates
+        int messageCount = logPacket.getMessages().size();
+        totalPacketsProcessed.increment();
+        totalMessagesProcessed.add(messageCount);
         
-        // Process each message and track by level and agent
+        // Process messages in batch
+        String agentId = logPacket.getAgentId();
+        messagesByAgent.computeIfAbsent(agentId, k -> new LongAdder()).add(messageCount);
+        
+        // Count by level efficiently
+        Map<String, Long> levelCounts = new ConcurrentHashMap<>();
         logPacket.getMessages().forEach(message -> {
             String level = message.getLevel().toString();
-            String agent = logPacket.getAgentId();
+            levelCounts.merge(level, 1L, Long::sum);
             
-            // Update level counters
-            messagesByLevel.computeIfAbsent(level, k -> new AtomicLong(0)).incrementAndGet();
-            
-            // Update agent counters
-            messagesByAgent.computeIfAbsent(agent, k -> new AtomicLong(0)).incrementAndGet();
-            
-            log.debug("MESSAGE_PROCESSED | analyzer={} | level={} | agent={} | message={}", 
-                    analyzerId, level, agent, message.getMessage());
+            // 🚀 VERY MINIMAL per-message logging - only for debugging
+            if (log.isTraceEnabled()) {
+                log.trace("MSG_PROC | analyzer={} | level={} | source={}", 
+                        analyzerId, level, message.getSource());
+            }
         });
+        
+        // 🚀 BATCH UPDATE level counters
+        levelCounts.forEach((level, count) -> 
+                messagesByLevel.computeIfAbsent(level, k -> new LongAdder()).add(count));
         
         Duration processingTime = Duration.between(startTime, Instant.now());
         
-        log.info("PACKET_PROCESSED | analyzer={} | packet_id={} | messages={} | processing_ms={} | total_packets={} | total_messages={}", 
-                analyzerId, logPacket.getPacketId(), logPacket.getMessages().size(), 
-                processingTime.toMillis(), totalPacketsProcessed.get(), totalMessagesProcessed.get());
+        // 🚀 REDUCED LOGGING frequency - only log significant packets or periodically
+        long totalPackets = totalPacketsProcessed.sum();
+        if (messageCount > 5 || totalPackets % 1000 == 0) {
+            log.info("PACKET_PROCESSED | analyzer={} | id={} | msgs={} | processing_ms={} | total_packets={} | total_messages={}", 
+                    analyzerId, logPacket.getPacketId(), messageCount, 
+                    processingTime.toMillis(), totalPackets, totalMessagesProcessed.sum());
+        }
         
+        // 🚀 IMMEDIATE RESPONSE - Don't wait for logging
         return ResponseEntity.ok("Log packet processed successfully\n");
     }
 }

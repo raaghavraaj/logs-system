@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 🚀 ASYNC LOGGING CONFIGURATION for High Throughput Analyzer -->
+    
+    <!-- Console Appender -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- 🚀 ASYNC WRAPPER - Non-blocking logging -->
+    <appender name="ASYNC_STDOUT" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="STDOUT"/>
+        <queueSize>1000</queueSize>           <!-- Smaller queue - analyzers process less -->
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>  
+        <neverBlock>true</neverBlock>
+    </appender>
+    
+    <!-- 🚀 HIGH-PERFORMANCE ANALYZER LOGGING -->
+    <logger name="com.resolveai.analyzer.controllers.AnalyzerController" 
+            level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_STDOUT"/>
+    </logger>
+    
+    <!-- Default logger -->
+    <root level="INFO">
+        <appender-ref ref="ASYNC_STDOUT"/>
+    </root>
+    
+    <!-- Profile-specific settings -->
+    <springProfile name="production">
+        <logger name="com.resolveai" level="WARN"/>
+    </springProfile>
+    
+    <springProfile name="development">
+        <logger name="com.resolveai" level="DEBUG"/>
+    </springProfile>
+</configuration>
