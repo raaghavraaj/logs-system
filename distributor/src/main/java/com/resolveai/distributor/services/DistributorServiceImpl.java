@@ -25,20 +25,19 @@ import java.util.concurrent.atomic.LongAdder;
 @Slf4j
 @Service
 public class DistributorServiceImpl implements DistributorService {
-    
-    // 🚀 HIGH-PERFORMANCE COUNTERS - Using LongAdder for reduced contention
+
     private final LongAdder startTime = new LongAdder();
     private final LongAdder totalMessagesProcessed = new LongAdder();
     private final LongAdder packetsQueued = new LongAdder();
     private final LongAdder packetsProcessed = new LongAdder();
     private final LongAdder packetsDropped = new LongAdder();
     
-    // 🚀 OPTIMIZED THREAD POOL - Smaller pool for async HTTP operations
+
     private final ExecutorService executorService = new ThreadPoolExecutor(
-            20, // Core pool size - REDUCED for async HTTP operations
-            50, // Max pool size - REDUCED since HTTP calls don't block threads
-            60L, TimeUnit.SECONDS, // Longer keep alive for stability
-            new LinkedBlockingQueue<>(10000), // Smaller queue for better backpressure
+            20,
+            50,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(10000),
             new ThreadFactory() {
                 private final AtomicInteger threadNumber = new AtomicInteger(1);
                 @Override
@@ -51,10 +50,9 @@ public class DistributorServiceImpl implements DistributorService {
             new ThreadPoolExecutor.CallerRunsPolicy()
     );
     
-    // 🚀 JAVA 11+ HTTP CLIENT - Async, connection pooling, HTTP/2 support
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
-            .executor(ForkJoinPool.commonPool()) // Use ForkJoinPool for HTTP operations
+            .executor(ForkJoinPool.commonPool())
             .build();
     
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -97,10 +95,8 @@ public class DistributorServiceImpl implements DistributorService {
     }
 
     @Override
-    public void distributePacket(LogPacket logPacket) {
-        Instant startTime = Instant.now();
-        
-        // 🚀 MINIMAL LOGGING in hot path - only packet ID for tracing
+    public void distributePacket(LogPacket logPacket) {        
+        // MINIMAL LOGGING in hot path - only packet ID for tracing
         if (log.isDebugEnabled()) {
             log.debug("PACKET_RECV | id={} | msgs={}", 
                     logPacket.getPacketId(), logPacket.getMessages().size());
@@ -120,19 +116,14 @@ public class DistributorServiceImpl implements DistributorService {
             return;
         }
         
-        // 🚀 ASYNC PROCESSING with CompletableFuture
         packetsQueued.increment();
         sendPacketAsyncOptimized(logPacket, targetAnalyzer);
         
-        // 🚀 REDUCED logging frequency - every 1000 packets instead of 100
         if (packetsQueued.sum() % 1000 == 0) {
             logSystemStatus();
         }
     }
 
-    /**
-     * 🚀 OPTIMIZED ANALYZER SELECTION - Reduced overhead, no per-packet health checks
-     */
     private AnalyzerInfo findBestAnalyzerOptimized(int packetMessageCount) {
         long currentTotalMessages = totalMessagesProcessed.sum();
         AnalyzerInfo bestCandidate = null;
@@ -140,37 +131,31 @@ public class DistributorServiceImpl implements DistributorService {
         AnalyzerInfo mostDeficitAnalyzer = null;
         double maxDeficit = 0.0;
 
-        // 🚀 OPTIMIZED ITERATION - Only check online analyzers
         for (AnalyzerInfo analyzer : analyzerInfoMap.values()) {
             if (!analyzer.isOnline()) {
-                continue; // Skip offline analyzers quickly
+                continue;
             }
             
-            // Current state calculations
             long currentMessages = analyzer.getMessageCount().sum();
             double currentIdeal = currentTotalMessages * analyzer.getWeight();
             double currentDeficit = currentIdeal - currentMessages;
             
-            // Future state calculations  
             long futureTotal = currentTotalMessages + packetMessageCount;
             double futureIdeal = futureTotal * analyzer.getWeight();
             long futureMessages = currentMessages + packetMessageCount;
             double futureDeviation = Math.abs(futureMessages - futureIdeal);
             
-            // Track maximum deficit for emergency catch-up
             if (currentDeficit > maxDeficit) {
                 maxDeficit = currentDeficit;
                 mostDeficitAnalyzer = analyzer;
             }
             
-            // Normal selection: minimize future deviation
             if (futureDeviation < minDeviation) {
                 minDeviation = futureDeviation;
                 bestCandidate = analyzer;
             }
         }
         
-        // Emergency catch-up logic (same threshold)
         if (mostDeficitAnalyzer != null && maxDeficit > 1000) {
             return mostDeficitAnalyzer;
         }
@@ -178,17 +163,12 @@ public class DistributorServiceImpl implements DistributorService {
         return bestCandidate;
     }
 
-    /**
-     * 🚀 ASYNC HTTP with Java 11+ HttpClient and CompletableFuture
-     */
     private void sendPacketAsyncOptimized(LogPacket logPacket, AnalyzerInfo analyzer) {
         CompletableFuture
             .supplyAsync(() -> {
                 try {
-                    // Serialize JSON
                     String jsonBody = objectMapper.writeValueAsString(logPacket);
                     
-                    // Build HTTP request
                     HttpRequest request = HttpRequest.newBuilder()
                             .uri(URI.create(analyzer.getEndpoint()))
                             .timeout(Duration.ofSeconds(30))
@@ -202,13 +182,10 @@ public class DistributorServiceImpl implements DistributorService {
                 }
             }, executorService)
             .thenCompose(request -> 
-                // 🚀 ASYNC HTTP CALL - Non-blocking!
                 httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
             )
             .thenAccept(response -> {
-                // 🚀 SUCCESS HANDLING
                 if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                    // Update counters with LongAdder
                     analyzer.getMessageCount().add(logPacket.getMessages().size());
                     totalMessagesProcessed.add(logPacket.getMessages().size());
                     analyzer.getConsecutiveFailures().set(0);
@@ -219,7 +196,6 @@ public class DistributorServiceImpl implements DistributorService {
                         analyzer.setOnline(true);
                     }
                     
-                    // 🚀 MINIMAL SUCCESS LOGGING
                     if (log.isDebugEnabled()) {
                         log.debug("PACKET_SUCCESS | id={} | analyzer={} | status={}", 
                                 logPacket.getPacketId(), getAnalyzerId(analyzer), response.statusCode());
@@ -232,7 +208,6 @@ public class DistributorServiceImpl implements DistributorService {
                 }
             })
             .exceptionally(throwable -> {
-                // 🚀 EXCEPTION HANDLING
                 log.error("PACKET_EXCEPTION | id={} | error={}", 
                         logPacket.getPacketId(), throwable.getMessage());
                 packetsDropped.increment();
@@ -241,10 +216,7 @@ public class DistributorServiceImpl implements DistributorService {
             });
     }
 
-    /**
-     * 🚀 SCHEDULED HEALTH CHECKS - Moved out of hot path!
-     */
-    @Scheduled(fixedRate = 5000) // Every 5 seconds instead of per-packet
+    @Scheduled(fixedRate = 5000)
     public void checkAnalyzerHealth() {
         Instant now = Instant.now();
         int recoveredCount = 0;
@@ -269,8 +241,6 @@ public class DistributorServiceImpl implements DistributorService {
         }
     }
 
-    // Helper methods (optimized versions of existing code)
-    
     private void parseAnalyzersConfig(String config) {
         try {
             String[] analyzerConfigs = config.split(",");
@@ -348,7 +318,6 @@ public class DistributorServiceImpl implements DistributorService {
     private void logSystemStatus() {
         long uptime = System.currentTimeMillis() - startTime.sum();
         long totalMessages = totalMessagesProcessed.sum();
-        long queued = packetsQueued.sum();
         long processed = packetsProcessed.sum();
         long dropped = packetsDropped.sum();
         
@@ -365,7 +334,7 @@ public class DistributorServiceImpl implements DistributorService {
         private final String endpoint;
         private final double weight;
         @Builder.Default
-        private final LongAdder messageCount = new LongAdder(); // 🚀 LongAdder for high contention
+        private final LongAdder messageCount = new LongAdder();
         
         // Health management
         @Builder.Default

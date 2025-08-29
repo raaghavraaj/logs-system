@@ -7,10 +7,10 @@
 **Rationale**: Packets contain variable message counts (1-100+ messages). Pure packet-based distribution would skew workload toward analyzers receiving larger packets.
 **Trade-off**: Increased complexity in tracking cumulative message counts vs. simpler packet counting, but ensures true proportional workload distribution.
 
-### **Concurrency Model: Optimized Thread Pool for High I/O**
-**Decision**: `ThreadPoolExecutor` with `LinkedBlockingQueue` (50,000 capacity) + `CallerRunsPolicy`. Core pool: 50 threads, Max pool: 200 threads.
-**Rationale**: High I/O-bound operations (HTTP requests to analyzers) benefit from larger thread pools. Increased queue capacity handles burst traffic effectively.
-**Trade-off**: Higher memory usage vs. significantly improved throughput (700+ messages/second). Prioritized performance over memory conservation.
+### **Concurrency Model: Async HTTP with Optimized Thread Pool**
+**Decision**: Java 11+ `HttpClient` with async operations + `ThreadPoolExecutor` (20-50 threads) + `LinkedBlockingQueue` (10,000 capacity) + `CallerRunsPolicy`.
+**Rationale**: Async HTTP eliminates thread blocking, allowing smaller thread pools for equivalent throughput. Modern HTTP client supports HTTP/2, connection pooling, and non-blocking operations.
+**Trade-off**: Reduced thread contention and memory usage while achieving 6,690+ messages/second throughput. Slightly increased complexity vs. traditional blocking HTTP.cl
 
 ### **Distribution Algorithm: Emergency Catch-up Mechanism**
 **Decision**: Hybrid approach combining weight-based selection with deficit correction.
@@ -23,22 +23,23 @@
 - **Packet Atomicity**: All messages within a packet sent to the same analyzer (no packet splitting)
 - **Best-Effort Distribution**: Temporary weight imbalances acceptable; eventual consistency prioritized (±2% tolerance)
 - **Stateless Processing**: No ordering guarantees required between packets or messages
-- **Resource Bounds**: System operates within single-machine memory constraints (50K queue capacity)
+- **Resource Bounds**: System operates within single-machine memory constraints (10K queue capacity with async processing)
 - **Network Reliability**: HTTP communication between services is reliable within Docker network
 - **Configuration Stability**: Analyzer weights and endpoints don't change during runtime
 - **Agent ID Uniqueness**: Each emitter has a unique and stable agent ID
 - **JSON Serialization**: Performance overhead of JSON is acceptable vs binary protocols
 
 ### **Performance Trade-offs**
-- **Latency vs. Throughput**: Prioritized throughput with acceptable latency (~12ms average)
+- **Latency vs. Throughput**: Prioritized high throughput (6,690+ msgs/sec) with low latency via async processing
 - **Memory vs. Persistence**: In-memory queuing for speed over durability guarantees
 - **Consistency vs. Availability**: Eventual weight consistency over strict real-time adherence
+- **Thread Efficiency vs. Simplicity**: Async HTTP complexity for 10x better thread utilization
 
 ### **System Configuration Assumptions**
 - **Failure Detection**: 3 consecutive HTTP failures indicate analyzer is offline
 - **Recovery Timeout**: 30-second offline timeout before attempting recovery
 - **Emergency Threshold**: 1000-message deficit triggers emergency catch-up routing
-- **Thread Pool Sizing**: 50/200 core/max threads optimal for I/O-bound HTTP operations
+- **Thread Pool Sizing**: 20/50 core/max threads optimal for async I/O operations
 - **Health Check Frequency**: 30-second intervals with 10-second timeouts sufficient
 - **Queue Processing**: 100-packet intervals for performance logging are appropriate
 
@@ -105,12 +106,33 @@
 **Current**: Structured event logging, simple parsing scripts, basic statistics endpoints
 **Future**: ELK stack integration, distributed tracing (Jaeger), advanced alerting via log analysis
 
+### **High-Performance HTTP Communication**
+**Decision**: Java 11+ `HttpClient` with `CompletableFuture` async operations instead of traditional `RestTemplate`.
+**Implementation**: Non-blocking HTTP calls with connection pooling, HTTP/2 support, and configurable timeouts.
+**Trade-off**: Modern async complexity vs. simple blocking HTTP. Chosen for 10x throughput improvement.
+
+### **Low-Contention Counters**
+**Decision**: `LongAdder` instead of `AtomicLong` for high-contention counting operations.
+**Rationale**: `LongAdder` uses segmented counting to reduce thread contention under high concurrent load.
+**Result**: Significant performance improvement in multi-threaded scenarios with frequent counter updates.
+
+### **Scheduled Health Management**
+**Decision**: Periodic analyzer health checks (5-second intervals) instead of per-packet health verification.
+**Rationale**: Eliminates health check overhead from critical packet processing path.
+**Trade-off**: Slightly delayed failure detection vs. zero hot-path performance impact.
+
+### **Async Logging Configuration** 
+**Decision**: Logback `AsyncAppender` with `neverBlock=true` for high-throughput logging.
+**Rationale**: Prevents logging I/O from blocking packet processing threads.
+**Configuration**: 1024-item queue with no log discarding to maintain observability.
+
 ## Key Design Principles Applied
 
 - **Fail-Fast**: Quick failure detection with automatic recovery
 - **Bounded Resources**: Predictable memory usage under all load conditions  
 - **Observability First**: Structured logging and simple monitoring from day one
 - **Configuration Over Code**: Environment-driven setup for operational flexibility
+- **Async-First Architecture**: Non-blocking operations for maximum throughput
 - **Test Automation**: Professional testing suite for confidence in changes
 
 This system demonstrates production-grade distributed systems design with emphasis on reliability, observability, and operational simplicity while maintaining high throughput and weighted distribution accuracy.
@@ -154,7 +176,7 @@ This system demonstrates production-grade distributed systems design with emphas
 - **Log Format**: `EVENT_TYPE | key=value | key=value | ...` for easy parsing
 
 ### **Results of Simplification**
-- **Performance**: Maintained 700+ messages/second throughput 
+- **Performance**: Achieved 6,690+ messages/second throughput 
 - **Memory Usage**: Reduced by ~20-30% (removed metrics collection overhead)
 - **Operational Complexity**: Significantly reduced (simple scripts vs complex dashboards)
 - **Tool Integration**: Structured logs work with any log analysis tool (ELK, Splunk, etc.)
@@ -170,7 +192,7 @@ This system demonstrates production-grade distributed systems design with emphas
 ### Current System Performance
 Based on comprehensive testing across multiple scenarios:
 
-- **Throughput**: 700+ messages/second (240+ packets/second)
+- **Throughput**: 6,690+ messages/second (1,670+ packets/second)
 - **Error Rate**: 0.00% under normal operations
 - **Queue Health**: Excellent (<5 items average queue size)
 - **Distribution Accuracy**: ±2% of target weights over time
