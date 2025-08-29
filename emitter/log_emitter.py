@@ -16,7 +16,7 @@ from requests.exceptions import RequestException
 
 class LogEmitter:
     def __init__(self, 
-                 distributor_url: str = "http://localhost:8080/api/v1/logs",
+                 distributor_url: str = "http://localhost:8080/api/v1/distribute",
                  agent_id: str = None,
                  emission_rate: float = 1.0,
                  burst_probability: float = 0.1):
@@ -211,7 +211,7 @@ class LogEmitter:
 def main():
     """Main entry point"""
     # Configuration from environment variables
-    distributor_url = os.getenv("DISTRIBUTOR_URL", "http://distributor:8080/api/v1/logs")
+    distributor_url = os.getenv("DISTRIBUTOR_URL", "http://distributor:8080/api/v1/distribute")
     agent_id = os.getenv("AGENT_ID", f"emitter-{os.getenv('HOSTNAME', 'local')}")
     emission_rate = float(os.getenv("EMISSION_RATE", "1.0"))
     mode = os.getenv("EMISSION_MODE", "continuous")  # continuous, burst, single
@@ -238,7 +238,7 @@ def main():
     for attempt in range(max_retries):
         try:
             # Test connection to distributor
-            response = requests.get(distributor_url.replace("/logs", "/health"), timeout=5)
+            response = requests.get(distributor_url.replace("/distribute", "/health"), timeout=5)
             if response.status_code == 200:
                 print(f"✅ Connected to distributor after {attempt + 1} attempts")
                 break

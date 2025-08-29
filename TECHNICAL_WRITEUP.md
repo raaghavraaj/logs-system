@@ -70,7 +70,7 @@
 ## Testing Strategy & Validation
 
 ### **Multi-Layered Testing Approach**
-1. **Integration Tests**: Multi-service interactions, failure scenarios, recovery testing using bash scripts
+1. **System Tests**: Multi-service interactions, failure scenarios, recovery testing using `test-system.sh`
 2. **Performance Tests**: JMeter professional load testing (50-400 concurrent requests)  
 3. **System Tests**: End-to-end weighted distribution validation via log analysis
 4. **Monitoring Tests**: Structured log parsing and system health validation
@@ -188,7 +188,7 @@ This system demonstrates production-grade distributed systems design with emphas
 
 ### **Implementation Details**
 - **Removed Components**: MetricsService (181 lines), MetricsController, Micrometer dependencies, Actuator endpoints
-- **Added Components**: Structured logging with consistent format, parse_logs.sh, monitor_system.sh
+- **Added Components**: Structured logging with consistent format, simple Docker-based log analysis
 - **Log Format**: `EVENT_TYPE | key=value | key=value | ...` for easy parsing
 
 ### **Results of Simplification**
@@ -230,7 +230,7 @@ Concurrent Agents: 10 agents × 20 packets → 90%+ success rate
 
 **Multi-Layered Approach**: Chosen to validate different aspects of system behavior:
 1. **Unit Tests** (15+ tests): Validate core algorithms in isolation
-2. **Integration Tests** (7 scenarios): Test multi-service interactions and failure modes
+2. **System Tests**: Comprehensive validation of multi-service interactions and weighted distribution
 3. **Performance Tests** (5 scenarios): Establish performance baselines and regression detection
 4. **JMeter Load Tests**: Professional-grade load testing with detailed reporting
 5. **System Tests**: End-to-end validation with realistic traffic patterns

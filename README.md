@@ -23,26 +23,30 @@ This system implements a high-performance logs distributor that receives log pac
 │   Emitters      │───▶│   Distributor   │───▶│   Analyzers     │
 │                 │    │                 │    │                 │
 │ • Steady        │    │ • Load Balancer │    │ • Analyzer-1    │
-│ • Bursty        │    │ • Queue Manager │    │ • Analyzer-2    │  
+│ • Bursty        │    │ • Queue Manager │    │ • Analyzer-2    │
 │ • Heavy Load    │    │ • Failure Detect│    │ • Analyzer-3    │
-│ • (Stress)      │    │ • Structured    │    │ • Analyzer-4    │
-└─────────────────┘    │   Logging       │    └─────────────────┘
+│ • (Stress)      │    │ • Health Checks │    │ • Analyzer-4    │
+└─────────────────┘    │ • Structured    │    └─────────────────┘
+                       │   Logging       │              │
                        └─────────────────┘              │
-                                                        │
-                                                        ▼
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │ Log Parsing     │    │ Simple Stats    │
-                       │ Scripts         │    │ Endpoints       │
-                       │ • parse_logs.sh │    │ • /health       │
-                       │ • monitor_sys.sh│    │ • /stats        │
-                       └─────────────────┘    └─────────────────┘
+                                  │                     │
+                                  ▼                     ▼
+                       ┌───────────────────┐    ┌─────────────────┐
+                       │ Distributor       │    │ Analyzer        │
+                       │ Endpoints         │    │ Endpoints       │
+                       │                   │    │                 │
+                       │ • POST /distribute│    │ • POST /analyze │
+                       │ • GET /health     │    │ • GET /health   │
+                       │                   │    │ • GET /stats    │
+                       └───────────────────┘    └─────────────────┘
 ```
 
 ### Components
-1. **Distributor Service**: Core routing service with weighted load balancing and structured logging
-2. **Analyzer Services**: 4 instances with configurable weights (0.1, 0.2, 0.3, 0.4)
-3. **Emitter Services**: 3+ Python-based log generators (steady, bursty, heavy, optional stress)
-4. **Observability Tools**: Log parsing scripts, health endpoints, simple statistics
+1. **Emitter Services**: 3+ Python-based log generators (steady, bursty, heavy, optional stress)
+2. **Distributor Service**: Core routing service with weighted load balancing and structured logging
+3. **Analyzer Services**: 4 instances with configurable weights (0.1, 0.2, 0.3, 0.4)  
+4. **Testing & Validation**: Comprehensive testing suite (test-system.sh, Apache Bench, JMeter)
+5. **Monitoring & Observability**: Docker-based log monitoring and structured log parsing
 
 ## 🚀 Quick Start
 
@@ -80,11 +84,11 @@ curl -s http://localhost:8084/api/v1/health  # Analyzer-4
 
 ### 3. Monitor System Performance
 ```bash
-# Complete real-time dashboard
-./monitor_system.sh
+# System health and distribution overview
+./test-system.sh health
 
 # Parse recent activity (last 5 minutes)
-./parse_logs.sh distributor 5
+docker logs logs-distributor --since 5m | grep -E "(PACKET_|ANALYZER_)" | tail -15
 
 # Check distribution accuracy
 ./test-system.sh distribution
@@ -103,14 +107,14 @@ curl -s http://localhost:8082/api/v1/health
 curl -s http://localhost:8083/api/v1/health
 curl -s http://localhost:8084/api/v1/health
 
-# 3. Check real-time performance
-./monitor_system.sh
+# 3. Check system health and performance
+./test-system.sh health
 ```
 
 ### Real-time System Monitoring
 ```bash
-# Complete system dashboard with health, performance, and distribution
-./monitor_system.sh
+# Complete system health check and weight distribution
+./test-system.sh
 
 # Example output:
 # 🚀 LOGS SYSTEM MONITORING DASHBOARD
@@ -123,10 +127,10 @@ curl -s http://localhost:8084/api/v1/health
 ### Log Analysis & Metrics
 ```bash
 # Analyze distributor activity (last 10 minutes)
-./parse_logs.sh distributor 10
+docker logs logs-distributor --since 10m | grep -E "(PACKET_|SYSTEM_STATUS)" | tail -20
 
-# Analyze specific analyzer performance (last 5 minutes)  
-./parse_logs.sh analyzer-1 5
+# Analyze specific analyzer processing (last 5 minutes)  
+docker logs logs-analyzer-1 --since 5m | grep "processed:" | tail -10
 
 # Expected output includes:
 # 📦 PACKET METRICS: received/processed/dropped counts
@@ -137,7 +141,7 @@ curl -s http://localhost:8084/api/v1/health
 ### Performance Testing
 ```bash
 # 1. Manual packet test - verify system works
-curl -X POST http://localhost:8080/api/v1/logs \
+curl -X POST http://localhost:8080/api/v1/distribute \
   -H "Content-Type: application/json" \
   -d '{
     "packetId": "test-001",
@@ -153,13 +157,13 @@ curl -X POST http://localhost:8080/api/v1/logs \
 
 # 3. High-performance load testing - Apache Bench (recommended for reviewers)
 # Test 2000 requests with 100 concurrent connections
-ab -n 2000 -c 100 -p test_payload.json -T application/json http://localhost:8080/api/v1/logs
+ab -n 2000 -c 100 -p test_payload.json -T application/json http://localhost:8080/api/v1/distribute
 
 # 4. Professional load testing with JMeter
 cd jmeter && ./run-jmeter-tests.sh
 
-# 5. Comprehensive integration tests
-./integration-tests.sh
+# 5. Comprehensive system validation
+./test-system.sh
 ```
 
 ### Get Detailed Statistics & Metrics
@@ -201,10 +205,10 @@ docker logs logs-distributor -f | grep "PACKET_" | tee live_metrics.log
 ### Troubleshooting Commands
 ```bash
 # Check for errors in the last hour
-./parse_logs.sh distributor 60 | grep "ERROR\|WARN"
+docker logs logs-distributor --since 60m | grep -E "(ERROR|WARN)" | tail -10
 
-# Monitor system performance and queue health
-./monitor_system.sh | grep "PERFORMANCE" -A 10
+# Monitor system performance and health
+./test-system.sh health && curl -s http://localhost:8080/api/v1/health
 
 # Check Docker container resource usage
 docker stats
@@ -223,7 +227,7 @@ docker-compose down && docker-compose up -d
 ```bash
 # High-performance concurrent load testing with Apache Bench
 echo '{"packetId":"load-test","agentId":"ab-test","messages":[{"id":"msg-1","level":"INFO","source":"ab.test","message":"Apache Bench load test"}]}' > test_payload.json
-ab -n 2000 -c 100 -p test_payload.json -T application/json http://localhost:8080/api/v1/logs
+ab -n 2000 -c 100 -p test_payload.json -T application/json http://localhost:8080/api/v1/distribute
 
 # Test with custom analyzer weights
 ANALYZERS_CONFIG="test-1:http://analyzer-1:8080/api/v1/analyze:0.3,test-2:http://analyzer-2:8080/api/v1/analyze:0.7" \
@@ -234,23 +238,23 @@ docker-compose up -d --scale emitter-steady=3
 
 # Test failure handling and recovery
 docker-compose stop analyzer-1    # Simulate analyzer failure
-./monitor_system.sh               # Observe failure detection
-docker-compose start analyzer-1   # Test automatic recovery
-./monitor_system.sh               # Verify recovery
+./test-system.sh health          # Observe failure detection
+docker-compose start analyzer-1   # Test automatic recovery  
+./test-system.sh health          # Verify recovery
 
-# View system performance during tests
-watch -n 2 ./monitor_system.sh
+# View system health during tests
+watch -n 2 './test-system.sh health'
 ```
 
 ### Complete Test Workflow
 ```bash
 # 1. Full system startup and validation
 docker-compose up -d
-sleep 30  # Allow system to stabilize
-./monitor_system.sh
+# Check system health and verify all services are ready
+./test-system.sh health
 
 # 2. Send test traffic and verify processing  
-curl -X POST http://localhost:8080/api/v1/logs -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/api/v1/distribute -H "Content-Type: application/json" \
   -d '{"packetId":"test","agentId":"test","messages":[{"level":"INFO","source":"TestService","message":"Test"}]}'
 
 # 3. Verify distribution accuracy
@@ -263,7 +267,7 @@ for i in {1..4}; do
 done
 
 # 5. Run comprehensive tests
-./integration-tests.sh
+./test-system.sh
 cd jmeter && ./run-jmeter-tests.sh
 
 # 6. System cleanup
@@ -278,11 +282,11 @@ The system includes comprehensive testing capabilities:
 
 #### 1. Run All Tests
 ```bash
-# Run integration tests
-./integration-tests.sh
+# Run comprehensive system tests
+./test-system.sh
 
-# Run performance benchmarks  
-./performance-test.sh
+# Run high-performance load testing (recommended)
+ab -n 1000 -c 50 -p test_payload.json -T application/json http://localhost:8080/api/v1/distribute
 
 # Check weight distribution
 ./test-system.sh distribution
@@ -303,7 +307,7 @@ curl http://localhost:8084/api/v1/health
 #### 3. Send Test Log Packet
 ```bash
 # Send a test log packet
-curl -X POST http://localhost:8080/api/v1/logs \
+curl -X POST http://localhost:8080/api/v1/distribute \
   -H "Content-Type: application/json" \
   -d '{
     "packetId": "test-001",
@@ -412,7 +416,7 @@ ANALYZER_WEIGHT=0.1
 SERVER_PORT=8080
 
 # Emitter Configuration
-DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+DISTRIBUTOR_URL=http://distributor:8080/api/v1/distribute
 AGENT_ID=steady-emitter
 EMISSION_RATE=2
 EMISSION_MODE=steady
@@ -445,7 +449,7 @@ cd distributor
 ### API Endpoints
 
 #### Distributor Endpoints
-- `POST /api/v1/logs` - Submit log packets for distribution
+- `POST /api/v1/distribute` - Submit log packets for distribution
 - `GET /api/v1/health` - Health check and status
 
 #### Analyzer Endpoints  
@@ -481,20 +485,22 @@ curl http://localhost:8082/api/v1/health
 curl http://localhost:8083/api/v1/health  
 curl http://localhost:8084/api/v1/health
 
-# View distribution logs
-./parse_logs.sh distributor 5 | grep "ANALYZER DISTRIBUTION"
+# View distribution analysis
+./test-system.sh distribution
 
-# Check for errors
-./monitor_system.sh | grep "ERROR MONITORING" -A 5
+# Check for errors in recent logs
+for service in distributor analyzer-1 analyzer-2 analyzer-3 analyzer-4; do
+  docker logs logs-$service --since 5m | grep -E "(ERROR|WARN)" | tail -2
+done
 ```
 
 #### Performance Issues
 ```bash
-# Check system performance
-./monitor_system.sh
+# Check system health and performance
+./test-system.sh health
 
-# Monitor log parsing
-./parse_logs.sh distributor 10
+# Monitor recent system activity
+docker logs logs-distributor --since 10m | grep -E "(PACKET_|ERROR|WARN)" | tail -15
 
 # Check resource usage
 docker stats
@@ -504,7 +510,7 @@ docker logs logs-distributor | tail -20
 ```
 
 ### Health Monitoring
-The system includes automatic failure detection and recovery using structured logging. Use `./monitor_system.sh` for real-time health monitoring. For details on circuit breaker patterns and recovery mechanisms, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
+The system includes automatic failure detection and recovery using structured logging. Use `./test-system.sh health` for system health monitoring. For details on circuit breaker patterns and recovery mechanisms, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).
 
 ## 📝 Testing
 
@@ -514,22 +520,53 @@ The system includes automatic failure detection and recovery using structured lo
 - **Load Tests**: Concurrent request handling and system stability
 - **End-to-End Tests**: Complete workflow validation
 
+### System Test Script (`test-system.sh`)
+The `test-system.sh` script is the **primary system validation tool** that provides comprehensive testing of the logs distribution system:
+
+**🎯 Purpose:**
+- **Service Health Checks**: Verifies all 5 services (distributor + 4 analyzers) are up and healthy
+- **Endpoint Validation**: Tests all REST API endpoints work as expected (`/health`, `/distribute`, `/stats`)
+- **Functional Integration**: End-to-end validation of the complete log processing pipeline
+- **Weight Distribution Testing**: Validates that analyzers receive messages proportional to their configured weights (0.1:0.2:0.3:0.4)
+- **Moderate Load Testing**: Sends ~120 test packets with concurrent agents to verify system behavior
+
+**📊 Test Phases:**
+1. Health check all services (60s timeout per service)
+2. Send individual test packets (3 packets)
+3. Moderate load test (20 packets with 4 concurrent agents)
+4. Weight distribution test (100 packets with 10 concurrent agents)
+5. Analyze message distribution across analyzers
+
+**💡 Usage:**
+```bash
+# Run complete system test suite
+./test-system.sh
+
+# Run specific test phases
+./test-system.sh health       # Health checks only
+./test-system.sh send         # Send single test packet
+./test-system.sh load 50 5    # Load test: 50 packets, 5 concurrent agents
+./test-system.sh distribution # Check weight distribution
+```
+
+This script is ideal for **continuous integration**, **deployment validation**, and **system verification** after configuration changes.
+
 ### Running Tests
 ```bash
 # Functional weight distribution testing
 ./test-system.sh distribution
 
 # High-performance load testing (recommended)
-ab -n 2000 -c 100 -p test_payload.json -T application/json http://localhost:8080/api/v1/logs
+ab -n 2000 -c 100 -p test_payload.json -T application/json http://localhost:8080/api/v1/distribute
 
 # Professional JMeter load tests  
 cd jmeter && ./run-jmeter-tests.sh
 
-# Comprehensive integration tests
-./integration-tests.sh
+# Complete system validation and weight distribution testing  
+./test-system.sh
 
-# Performance benchmarking
-./performance-test.sh
+# High-performance benchmarking with Apache Bench
+ab -n 2000 -c 100 -p test_payload.json -T application/json http://localhost:8080/api/v1/distribute
 ```
 
 For detailed testing strategy and methodology, see [TECHNICAL_WRITEUP.md](./TECHNICAL_WRITEUP.md).

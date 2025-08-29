@@ -15,7 +15,7 @@
           </elementProp>
           <elementProp name="LOGS_ENDPOINT" elementType="Argument">
             <stringProp name="Argument.name">LOGS_ENDPOINT</stringProp>
-            <stringProp name="Argument.value">/api/v1/logs</stringProp>
+            <stringProp name="Argument.value">/api/v1/distribute</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
         </collectionProp>
@@ -45,7 +45,7 @@
           <stringProp name="HTTPSampler.port">8080</stringProp>
           <stringProp name="HTTPSampler.protocol">http</stringProp>
           <stringProp name="HTTPSampler.contentEncoding"></stringProp>
-          <stringProp name="HTTPSampler.path">/api/v1/logs</stringProp>
+          <stringProp name="HTTPSampler.path">/api/v1/distribute</stringProp>
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
           <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
@@ -117,7 +117,7 @@
           <stringProp name="HTTPSampler.port">8080</stringProp>
           <stringProp name="HTTPSampler.protocol">http</stringProp>
           <stringProp name="HTTPSampler.contentEncoding"></stringProp>
-          <stringProp name="HTTPSampler.path">/api/v1/logs</stringProp>
+          <stringProp name="HTTPSampler.path">/api/v1/distribute</stringProp>
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
           <boolProp name="HTTPSampler.auto_redirects">false</boolProp>

@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 BASE_URL="http://localhost:8080"
-DISTRIBUTOR_ENDPOINT="$BASE_URL/api/v1/logs"
+DISTRIBUTOR_ENDPOINT="$BASE_URL/api/v1/distribute"
 
 # Function to check if services are ready
 check_health() {

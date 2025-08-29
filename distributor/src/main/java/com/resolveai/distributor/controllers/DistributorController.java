@@ -21,7 +21,7 @@ public class DistributorController {
         return ResponseEntity.ok("Distributor is online.\n");
     }
 
-    @PostMapping("/logs")
+    @PostMapping("/distribute")
     public ResponseEntity<Void> receiveLogPacket(@RequestBody LogPacket logPacket) {
         log.info("Log packet received: {}", logPacket.getPacketId());
         distributorService.distributePacket(logPacket);

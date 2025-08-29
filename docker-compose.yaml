@@ -117,7 +117,7 @@ services:
       context: ./emitter
     container_name: logs-emitter-steady
     environment:
-      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/distribute
       - AGENT_ID=steady-emitter
       - EMISSION_RATE=50.0
       - EMISSION_MODE=continuous
@@ -133,7 +133,7 @@ services:
       context: ./emitter
     container_name: logs-emitter-bursty
     environment:
-      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/distribute
       - AGENT_ID=bursty-emitter
       - EMISSION_RATE=25.0
       - EMISSION_MODE=continuous
@@ -150,7 +150,7 @@ services:
       context: ./emitter
     container_name: logs-emitter-heavy
     environment:
-      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/distribute
       - AGENT_ID=heavy-load-emitter
       - EMISSION_RATE=100.0
       - EMISSION_MODE=continuous
@@ -166,7 +166,7 @@ services:
       context: ./emitter
     container_name: logs-emitter-stress
     environment:
-      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/logs
+      - DISTRIBUTOR_URL=http://distributor:8080/api/v1/distribute
       - AGENT_ID=stress-test-emitter
       - EMISSION_RATE=200.0
       - EMISSION_MODE=continuous
