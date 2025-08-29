@@ -54,8 +54,6 @@ class LogEmitter:
         """Generate a realistic log message"""
         level = random.choices(self.log_levels, weights=self.log_weights)[0]
         service = random.choice(app_config["services"])
-        instance = f"{service}-{random.randint(1, 3)}"
-        host = f"prod-server-{random.randint(1, 10):02d}"
         
         # Generate realistic log messages based on level
         messages_by_level = {
