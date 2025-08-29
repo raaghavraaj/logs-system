@@ -65,7 +65,7 @@ metrics_endpoints_test() {
 
 log_packet_distribution_test() {
     # Send test packets and verify distribution
-    local test_packet='{"packetId":"integration-test-1","agentId":"integration-test-agent","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","totalMessages":1,"messages":[{"id":"msg-1","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","level":"INFO","source":{"application":"test","service":"integration","instance":"1","host":"localhost"},"message":"Integration test message","metadata":{}}],"checksum":"test-checksum"}'
+    local test_packet='{"packetId":"integration-test-1","agentId":"integration-test-agent","messages":[{"id":"msg-1","level":"INFO","source":"test.integration","message":"Integration test message"}]}'
     
     # Send multiple packets
     for i in {1..20}; do
@@ -91,7 +91,7 @@ log_packet_distribution_test() {
 
 weighted_distribution_test() {
     # Test that distribution respects analyzer weights over time
-    local test_packet='{"packetId":"weight-test","agentId":"weight-test-agent","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","totalMessages":1,"messages":[{"id":"msg-1","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","level":"INFO","source":{"application":"test","service":"weight","instance":"1","host":"localhost"},"message":"Weight test message","metadata":{}}],"checksum":"test-checksum"}'
+    local test_packet='{"packetId":"weight-test","agentId":"weight-test-agent","messages":[{"id":"msg-1","level":"INFO","source":"test.weight","message":"Weight test message"}]}'
     
     # Send many packets to test distribution
     for i in {1..100}; do
@@ -132,7 +132,7 @@ failure_recovery_test() {
     # Test system resilience - simplified version
     # Send packets and verify system handles them gracefully
     
-    local test_packet='{"packetId":"failure-test","agentId":"failure-test-agent","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","totalMessages":1,"messages":[{"id":"msg-1","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","level":"ERROR","source":{"application":"test","service":"failure","instance":"1","host":"localhost"},"message":"Failure test message","metadata":{}}],"checksum":"test-checksum"}'
+    local test_packet='{"packetId":"failure-test","agentId":"failure-test-agent","messages":[{"id":"msg-1","level":"ERROR","source":"test.failure","message":"Failure test message"}]}'
     
     local successful_requests=0
     for i in {1..10}; do
@@ -154,7 +154,7 @@ performance_stress_test() {
     # Send high volume of packets to test performance
     echo "Running performance stress test with 200 packets..."
     
-    local test_packet='{"packetId":"stress-test","agentId":"stress-test-agent","timestamp":'$(date +%s000)',"messages":[{"timestamp":'$(date +%s000)',"level":"DEBUG","content":"Stress test message","source":"APPLICATION"},{"timestamp":'$(date +%s000)',"level":"INFO","content":"Another stress test message","source":"INFRASTRUCTURE"}]}'
+    local test_packet='{"packetId":"stress-test","agentId":"stress-test-agent","messages":[{"id":"msg-1","level":"DEBUG","source":"test.stress","message":"Stress test message"},{"id":"msg-2","level":"INFO","source":"test.stress","message":"Another stress test message"}]}'
     
     local start_time=$(date +%s)
     

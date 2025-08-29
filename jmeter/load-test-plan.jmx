@@ -62,62 +62,32 @@
                 <stringProp name="Argument.value">{
   "packetId": "jmeter-test-${__threadNum}-${__counter(FALSE)}",
   "agentId": "jmeter-agent-${__threadNum}",
-  "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
-  "totalMessages": 3,
   "messages": [
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "${__chooseRandom(DEBUG,INFO,WARN,ERROR,FATAL)}",
-      "source": {
-        "application": "jmeter-load-test",
-        "service": "test-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "load-test-host"
-      },
+      "source": "jmeter-load-test.test-service-${__threadNum}",
       "message": "JMeter load test message ${__counter(FALSE)} from thread ${__threadNum}",
-      "metadata": {
-        "testType": "load",
-        "threadId": "${__threadNum}",
-        "timestamp": "${__time()}"
-      }
+
     },
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "${__chooseRandom(DEBUG,INFO,WARN,ERROR,FATAL)}",
-      "source": {
-        "application": "jmeter-load-test",
-        "service": "test-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "load-test-host"
-      },
+      "source": "jmeter-load-test.test-service-${__threadNum}",
       "message": "Second message in packet ${__counter(FALSE)} from thread ${__threadNum}",
-      "metadata": {
-        "testType": "load",
-        "threadId": "${__threadNum}",
-        "timestamp": "${__time()}"
-      }
+
     },
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "${__chooseRandom(DEBUG,INFO,WARN,ERROR,FATAL)}",
-      "source": {
-        "application": "jmeter-load-test",
-        "service": "test-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "load-test-host"
-      },
+      "source": "jmeter-load-test.test-service-${__threadNum}",
       "message": "Third message in packet ${__counter(FALSE)} from thread ${__threadNum}",
-      "metadata": {
-        "testType": "load",
-        "threadId": "${__threadNum}",
-        "timestamp": "${__time()}"
-      }
+
     }
-  ],
-  "checksum": "jmeter-test-${__threadNum}-${__counter(FALSE)}"
+  ]
 }</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
@@ -185,88 +155,49 @@
                 <stringProp name="Argument.value">{
   "packetId": "stress-test-${__threadNum}-${__counter(FALSE)}",
   "agentId": "stress-agent-${__threadNum}",
-  "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
-  "totalMessages": 5,
+
   "messages": [
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "ERROR",
-      "source": {
-        "application": "jmeter-stress-test",
-        "service": "stress-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "stress-test-host"
-      },
+      "source": "jmeter-stress-test.stress-service-${__threadNum}",
       "message": "High volume stress test ERROR message ${__counter(FALSE)}",
-      "metadata": {
-        "testType": "stress",
-        "priority": "high"
-      }
+
     },
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "WARN",
-      "source": {
-        "application": "jmeter-stress-test",
-        "service": "stress-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "stress-test-host"
-      },
+      "source": "jmeter-stress-test.stress-service-${__threadNum}",
       "message": "High volume stress test WARN message ${__counter(FALSE)}",
-      "metadata": {
-        "testType": "stress"
-      }
+
     },
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "INFO",
-      "source": {
-        "application": "jmeter-stress-test",
-        "service": "stress-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "stress-test-host"
-      },
+      "source": "jmeter-stress-test.stress-service-${__threadNum}",
       "message": "High volume stress test INFO message ${__counter(FALSE)}",
-      "metadata": {
-        "testType": "stress"
-      }
+
     },
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "DEBUG",
-      "source": {
-        "application": "jmeter-stress-test",
-        "service": "stress-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "stress-test-host"
-      },
+      "source": "jmeter-stress-test.stress-service-${__threadNum}",
       "message": "High volume stress test DEBUG message ${__counter(FALSE)}",
-      "metadata": {
-        "testType": "stress"
-      }
+
     },
     {
       "id": "msg-${__UUID}",
-      "timestamp": "${__time(yyyy-MM-dd'T'HH:mm:ss.SSS'Z')}",
+
       "level": "FATAL",
-      "source": {
-        "application": "jmeter-stress-test",
-        "service": "stress-service-${__threadNum}",
-        "instance": "instance-${__threadNum}",
-        "host": "stress-test-host"
-      },
+      "source": "jmeter-stress-test.stress-service-${__threadNum}",
       "message": "High volume stress test FATAL message ${__counter(FALSE)}",
-      "metadata": {
-        "testType": "stress",
-        "priority": "critical"
-      }
+
     }
-  ],
-  "checksum": "stress-test-${__threadNum}-${__counter(FALSE)}"
+  ]
 }</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>

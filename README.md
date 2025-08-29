@@ -141,11 +141,10 @@ curl -X POST http://localhost:8080/api/v1/logs \
   -H "Content-Type: application/json" \
   -d '{
     "packetId": "test-001",
-    "agentId": "manual-test", 
-    "totalMessages": 2,
+    "agentId": "manual-test",
     "messages": [
-      {"level": "INFO", "message": "Test message 1"},
-      {"level": "ERROR", "message": "Test message 2"}
+      {"level": "INFO", "source": "TestController.healthCheck", "message": "Test message 1"},
+      {"level": "ERROR", "source": "TestController.errorHandler", "message": "Test message 2"}
     ]
   }'
 
@@ -250,7 +249,7 @@ sleep 30  # Allow system to stabilize
 
 # 2. Send test traffic and verify processing  
 curl -X POST http://localhost:8080/api/v1/logs -H "Content-Type: application/json" \
-  -d '{"packetId":"test","agentId":"test","totalMessages":1,"messages":[{"level":"INFO","message":"Test"}]}'
+  -d '{"packetId":"test","agentId":"test","messages":[{"level":"INFO","source":"TestService","message":"Test"}]}'
 
 # 3. Verify distribution accuracy
 ./test-system.sh distribution
@@ -307,22 +306,12 @@ curl -X POST http://localhost:8080/api/v1/logs \
   -d '{
     "packetId": "test-001",
     "agentId": "manual-test",
-    "timestamp": "2024-01-01T12:00:00.000Z",
-    "totalMessages": 1,
     "messages": [{
       "id": "msg-1",
-      "timestamp": "2024-01-01T12:00:00.000Z",
       "level": "INFO",
-      "source": {
-        "application": "test-app",
-        "service": "test-service",
-        "instance": "1",
-        "host": "localhost"
-      },
-      "message": "Manual test message",
-      "metadata": {}
-    }],
-    "checksum": "test-checksum"
+      "source": "test-app.test-service",
+      "message": "Manual test message"
+    }]
   }'
 ```
 

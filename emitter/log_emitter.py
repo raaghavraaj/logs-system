@@ -93,43 +93,10 @@ class LogEmitter:
         
         message = random.choice(messages_by_level[level])
         
-        # Generate metadata based on service type
-        metadata = {
-            "correlationId": f"corr-{uuid.uuid4().hex[:12]}",
-            "requestId": f"req-{uuid.uuid4().hex[:8]}",
-            "sessionId": f"sess-{uuid.uuid4().hex[:10]}",
-            "emitterAgent": self.agent_id
-        }
-        
-        # Add service-specific metadata
-        if "auth" in service:
-            metadata.update({
-                "userId": f"user-{random.randint(1000, 9999)}",
-                "clientIp": f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}",
-                "userAgent": "LogEmitter/1.0"
-            })
-        elif "payment" in service or "billing" in service:
-            metadata.update({
-                "amount": round(random.uniform(10.0, 1000.0), 2),
-                "currency": random.choice(["USD", "EUR", "GBP"]),
-                "transactionId": f"txn-{uuid.uuid4().hex[:12]}"
-            })
-        elif level in ["ERROR", "FATAL"]:
-            metadata.update({
-                "errorCode": f"{service.upper()}_{random.randint(1, 999):03d}",
-                "stackTrace": f"at com.resolveai.{app_config['app']}.{service}.Service::{random.randint(50, 200)}"
-            })
-        
         return {
             "level": level,
-            "source": {
-                "application": app_config["app"],
-                "service": service,
-                "instance": instance,
-                "host": host
-            },
-            "message": message,
-            "metadata": metadata
+            "source": f"{app_config['app']}.{service}",  # Simple string: "payment-service.billing"
+            "message": message
         }
     
     def generate_log_packet(self, num_messages: int = None) -> Dict[str, Any]:
@@ -154,9 +121,7 @@ class LogEmitter:
         packet = {
             "packetId": f"pkt-{uuid.uuid4()}",
             "agentId": self.agent_id,
-            "totalMessages": num_messages,
-            "messages": messages,
-            "checksum": f"sha256:{uuid.uuid4().hex[:32]}"  # Simulated checksum
+            "messages": messages
         }
         
         return packet
@@ -174,7 +139,7 @@ class LogEmitter:
             if response.status_code == 202:
                 self.packets_sent += 1
                 print(f"📤 Sent packet {packet['packetId'][:12]}... "
-                      f"({packet['totalMessages']} messages) - Total sent: {self.packets_sent}")
+                      f"({len(packet['messages'])} messages) - Total sent: {self.packets_sent}")
                 return True
             else:
                 print(f"❌ Failed to send packet {packet['packetId'][:12]}... "

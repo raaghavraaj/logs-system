@@ -49,7 +49,7 @@ baseline_performance_test() {
     echo "Sending 100 packets with 1 message each..."
     
     local start_time=$(date +%s)
-    local test_packet='{"packetId":"baseline-test","agentId":"baseline-agent","timestamp":'$(date +%s000)',"messages":[{"id":"msg-1","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","level":"INFO","source":{"application":"test","service":"baseline","instance":"1","host":"localhost"},"message":"Baseline performance test","metadata":{}}]}'
+    local test_packet='{"packetId":"baseline-test","agentId":"baseline-agent","messages":[{"id":"msg-1","level":"INFO","source":"test.baseline","message":"Baseline performance test"}]}'
     
     local successful_requests=0
     for i in {1..100}; do
@@ -80,7 +80,7 @@ stress_test_burst_traffic() {
     echo "💥 Burst Traffic Stress Test"
     echo "Sending 500 packets in rapid succession..."
     
-    local test_packet='{"packetId":"burst-test","agentId":"burst-agent","timestamp":'$(date +%s000)',"messages":[{"id":"msg-1","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","level":"WARN","source":{"application":"test","service":"burst","instance":"1","host":"localhost"},"message":"Burst traffic test","metadata":{}},{"id":"msg-2","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","level":"ERROR","source":{"application":"test","service":"burst","instance":"1","host":"localhost"},"message":"Another burst message","metadata":{}}]}'
+    local test_packet='{"packetId":"burst-test","agentId":"burst-agent","messages":[{"id":"msg-1","level":"WARN","source":"test.burst","message":"Burst traffic test"},{"id":"msg-2","level":"ERROR","source":"test.burst","message":"Another burst message"}]}'
     
     local start_time=$(date +%s.%3N)
     local successful_requests=0
@@ -135,7 +135,7 @@ sustained_load_test() {
     echo "🔄 Sustained Load Test"
     echo "Sending steady traffic for 30 seconds..."
     
-    local test_packet='{"packetId":"sustained-test","agentId":"sustained-agent","timestamp":'$(date +%s000)',"messages":[{"id":"msg-1","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","level":"DEBUG","source":{"application":"test","service":"sustained","instance":"1","host":"localhost"},"message":"Sustained load test message","metadata":{}}]}'
+    local test_packet='{"packetId":"sustained-test","agentId":"sustained-agent","messages":[{"id":"msg-1","level":"DEBUG","source":"test.sustained","message":"Sustained load test message"}]}'
     
     local start_time=$(date +%s)
     local end_time=$((start_time + 30))
@@ -181,7 +181,7 @@ memory_stress_test() {
     # Create a packet with many messages
     local large_messages=""
     for i in {1..50}; do
-        large_messages+="{\"id\":\"msg-$i\",\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")\",\"level\":\"INFO\",\"source\":{\"application\":\"test\",\"service\":\"memory\",\"instance\":\"$i\",\"host\":\"localhost\"},\"message\":\"Large memory test message with extra content to increase size - Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\",\"metadata\":{\"extra_data\":\"This is additional metadata to increase message size\",\"iteration\":$i,\"timestamp\":$(date +%s)}}"
+        large_messages+="{\"id\":\"msg-$i\",\"level\":\"INFO\",\"source\":\"test.memory\",\"message\":\"Large memory test message with extra content to increase size - Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\"}"
         if [ $i -lt 50 ]; then
             large_messages+=","
         fi
@@ -230,7 +230,7 @@ concurrent_agents_test() {
         {
             local agent_successful=0
             for i in {1..20}; do
-                local test_packet="{\"packetId\":\"agent-$agent_id-packet-$i\",\"agentId\":\"concurrent-agent-$agent_id\",\"timestamp\":$(date +%s000),\"messages\":[{\"id\":\"msg-1\",\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")\",\"level\":\"INFO\",\"source\":{\"application\":\"test\",\"service\":\"agent-$agent_id\",\"instance\":\"1\",\"host\":\"host-$agent_id\"},\"message\":\"Concurrent agent $agent_id message $i\",\"metadata\":{\"agent_id\":$agent_id,\"iteration\":$i}}]}"
+                local test_packet="{\"packetId\":\"agent-$agent_id-packet-$i\",\"agentId\":\"concurrent-agent-$agent_id\",\"messages\":[{\"id\":\"msg-1\",\"level\":\"INFO\",\"source\":\"test.agent-$agent_id\",\"message\":\"Concurrent agent $agent_id message $i\"}]}"
                 
                 if curl -f -s -X POST -H "Content-Type: application/json" -d "$test_packet" "$DISTRIBUTOR_URL/api/v1/logs" > /dev/null; then
                     agent_successful=$((agent_successful + 1))

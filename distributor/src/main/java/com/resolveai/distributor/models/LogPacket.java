@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * The {@code LogPacket} class describes the data model of an object which will be a packet on the network consisting of
- * several different logs. The log packet also contains a {@code checkSum} field for integrity verification.
+ * several different log messages from a specific agent.
  */
 @Builder
 @Data
@@ -26,13 +26,7 @@ public class LogPacket {
     @Builder.Default
     private Instant timestamp = Instant.now();
 
-    @JsonProperty("totalMessages")
-    private int totalMessages;
-
     @JsonProperty("messages")
     private List<LogMessage> messages;
-
-    @JsonProperty("checksum")
-    private String checksum;
 }
 

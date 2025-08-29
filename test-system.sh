@@ -50,19 +50,10 @@ send_log_packet() {
             messages+=","
         fi
         messages+='{
+            "id": "msg-'$i'",
             "level": "'$level'",
-            "source": {
-                "application": "test-app-'$agent_id'",
-                "service": "test-service",
-                "instance": "instance-'$i'",
-                "host": "test-host-'$agent_id'"
-            },
-            "message": "Test log message #'$i' from agent '$agent_id'",
-            "metadata": {
-                "packetId": "'$packet_id'",
-                "testRun": "automated-test",
-                "messageIndex": '$i'
-            }
+            "source": "test-app-'$agent_id'.test-service",
+            "message": "Test log message #'$i' from agent '$agent_id'"
         }'
     done
     
@@ -70,9 +61,7 @@ send_log_packet() {
     local packet='{
         "packetId": "'$packet_id'",
         "agentId": "'$agent_id'",
-        "totalMessages": '$num_messages',
-        "messages": ['$messages'],
-        "checksum": "test-checksum-'$packet_id'"
+        "messages": ['$messages']
     }'
     
     # Send the packet
