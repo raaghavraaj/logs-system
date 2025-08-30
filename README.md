@@ -212,3 +212,72 @@ curl -s http://localhost:8084/api/v1/stats | jq -r '"Analyzer-4: \(.totalMessage
 # Time per request: 14.947 [ms] (mean)  
 # Transfer rate: 1876.45 [Kbytes/sec] received
 ```
+
+---
+
+## How to Run the Demo
+
+Complete demo walkthrough to validate the logs distribution system:
+
+### 1. Start & Verify Services
+```bash
+# Start all services
+docker-compose up -d
+
+# Wait for services to be ready (30 seconds)
+sleep 30
+
+# Verify all services are healthy
+docker-compose ps
+curl http://localhost:8080/api/v1/health    # Distributor
+curl http://localhost:8081/api/v1/health    # Analyzer-1
+curl http://localhost:8082/api/v1/health    # Analyzer-2  
+curl http://localhost:8083/api/v1/health    # Analyzer-3
+curl http://localhost:8084/api/v1/health    # Analyzer-4
+```
+
+### 2. Basic Endpoint Testing
+```bash
+# Run comprehensive system validation
+./test-system.sh
+
+# Expected: ✅ All health checks pass
+# Expected: ✅ Log packets processed successfully  
+# Expected: ✅ Weighted distribution verified (0.1:0.2:0.3:0.4 ratio)
+```
+
+### 3. Load Testing Demo
+```bash
+cd load-testing
+
+# k6 Performance Testing (2,477 req/sec peak)
+./run-k6-tests.sh spike
+
+# Locust Realistic User Testing (203 req/sec sustained)  
+./run-locust-tests.sh baseline
+```
+
+### 4. View Results
+```bash
+# Terminal Results: Displayed automatically after each test
+# - Throughput metrics (req/sec)
+# - Error rates (0.00% expected)
+# - Response times (sub-6ms expected)
+# - Message distribution across analyzers
+
+# Detailed Reports:
+ls load-testing/results/           # Generated files
+open load-testing/results/*.html   # Locust HTML reports (macOS)
+
+# System Logs:
+docker-compose logs distributor | tail -20    # Recent distributor activity
+docker-compose logs analyzer-1 | tail -10     # Analyzer processing stats
+```
+
+### Expected Demo Results
+- **Health**: All 5 services running and responsive
+- **Functionality**: 120+ test packets processed with correct distribution
+- **Performance**: 2,477 req/sec peak, 0% error rate, sub-6ms response times  
+- **Load Balancing**: Perfect weighted distribution (10.6%, 21.7%, 28.0%, 39.7%)
+
+**Total Demo Time**: ~5 minutes | **Total Requests Processed**: 270,000+
