@@ -19,8 +19,7 @@ target/
 
 # === TESTING & RESULTS ===
 # Test result directories
-test-results/
-performance-results/
+load-testing/results/
 
 # JMeter results
 jmeter/results/

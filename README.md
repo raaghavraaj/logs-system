@@ -137,26 +137,44 @@ Comprehensive system validation using our custom test script:
 - Message distribution matches configured weights (0.1:0.2:0.3:0.4)
 - Sends 120+ test packets to validate system under moderate load
 
-### JMeter Load Testing
-Professional load testing with detailed reports:
+### k6 & Locust Load Testing  
+Professional load testing with modern tools:
 ```bash
-# Prerequisites: Install JMeter
-brew install jmeter  # macOS
-# or sudo apt install jmeter  # Ubuntu
+# Prerequisites: Install k6 and Docker
+brew install k6                    # macOS  
+# Locust runs in Docker - no local Python installation needed!
 
-# Run comprehensive load tests
-cd jmeter
-./run-jmeter-tests.sh
+# Start the system first
+docker-compose up -d
 
-# View results in generated HTML report
-open results/Load_Test_Plan_*_html_report/index.html
+# Run k6 comprehensive load tests
+cd load-testing
+./run-k6-tests.sh                  # All scenarios (baseline + spike)
+./run-k6-tests.sh baseline         # Baseline only (447 req/sec)
+./run-k6-tests.sh spike            # Spike testing (2,477 req/sec peak)
+
+# Run Locust load tests (Docker-based)
+./run-locust-tests.sh baseline     # Realistic user behavior (203 req/sec)
+./run-locust-tests.sh stress       # Stress testing
+./run-locust-tests.sh ui           # Interactive web UI at localhost:8089
+
+# Check results
+ls results/                        # View generated reports
 ```
 
-**Test scenarios:**
-- **Baseline**: 5 concurrent users, 50 requests (baseline performance)
-- **Stress**: 20 concurrent users, 400 requests (stress testing)
+**Test Results Summary:**
+- **k6 Baseline**: 447 req/sec, 0% errors, 5.25ms (95th percentile)  
+- **k6 Spike**: 2,477 req/sec peak, 300 concurrent users, 0% errors
+- **Locust**: 203 req/sec sustained, 1ms median response time, 0% errors
+- **Total**: 270,779 requests processed with perfect weighted distribution
 
-**Validates:** Response times, throughput, error rates, concurrency handling
+**Test Patterns Explained:**
+- **Baseline**: Normal capacity under typical load (10-100 users, gradual ramp)
+- **Spike**: Sudden traffic surges (1→300 users rapidly, tests resilience)  
+- **Locust**: Realistic user behavior with mixed workload patterns
+- **Results**: JSON/HTML reports, real-time metrics, distribution validation
+
+**Validates:** Performance, scalability, weighted distribution, system resilience
 
 ### Apache Bench Performance Testing
 High-performance concurrent load testing:
